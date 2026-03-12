@@ -1,0 +1,79 @@
+;
+; Shift-register step/direction output for 7 stepper axes.
+;
+; Uses two chained 74HC595 shift registers to output 14 signals
+; (7x step + 7x dir) from just 3 GPIO pins (DATA, CLOCK, LATCH).
+;
+; Protocol:
+;   1. Host (Core 1) pushes a 16-bit word into the TX FIFO
+;   2. PIO shifts out all 16 bits via DATA/CLOCK
+;   3. PIO pulses LATCH to transfer shift register to outputs
+;   4. PIO waits for a programmable delay (step pulse width)
+;   5. PIO clears step bits and shifts out again (step pulse end)
+;
+; Bit layout (MSB first):
+;   [15:14] = STEP6, DIR6
+;   [13:12] = STEP5, DIR5
+;   [11:10] = STEP4, DIR4
+;   [9:8]   = STEP3, DIR3
+;   [7:6]   = STEP2, DIR2
+;   [5:4]   = STEP1, DIR1
+;   [3:2]   = STEP0, DIR0
+;   [1:0]   = reserved
+;
+
+.program step_dir_sr
+
+.side_set 1     ; CLOCK pin as side-set
+
+.wrap_target
+    ; Wait for step data from Core 1
+    pull block                  side 0
+
+    ; Shift out 16 bits (MSB first) with clock
+    set x, 15                  side 0
+bitloop:
+    out pins, 1                side 0    ; Put bit on DATA
+    nop                        side 1    ; Clock rising edge — shift register captures
+    jmp x-- bitloop            side 0    ; Clock falling edge
+
+    ; Pulse latch to transfer to outputs
+    set pins, 1               side 0     ; LATCH high
+    nop                        side 0     ; Hold latch
+    set pins, 0               side 0     ; LATCH low — outputs updated
+.wrap
+
+% c-sdk {
+static inline void step_dir_sr_program_init(
+    PIO pio, uint sm, uint offset,
+    uint pin_data, uint pin_clock, uint pin_latch
+) {
+    pio_sm_config c = step_dir_sr_program_get_default_config(offset);
+
+    /* DATA pin: out pin */
+    sm_config_set_out_pins(&c, pin_data, 1);
+    pio_gpio_init(pio, pin_data);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_data, 1, true);
+
+    /* CLOCK pin: side-set */
+    sm_config_set_sideset_pins(&c, pin_clock);
+    pio_gpio_init(pio, pin_clock);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_clock, 1, true);
+
+    /* LATCH pin: set pin */
+    sm_config_set_set_pins(&c, pin_latch, 1);
+    pio_gpio_init(pio, pin_latch);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_latch, 1, true);
+
+    /* Shift out MSB first, autopull off */
+    sm_config_set_out_shift(&c, false, false, 16);
+
+    /* Clock divider: 125MHz / 4 = 31.25MHz bit rate
+     * Each bit takes 3 cycles => ~10MHz effective shift rate
+     * Full 16-bit shift + latch: ~5us */
+    sm_config_set_clkdiv(&c, 4.0f);
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

@@ -1,0 +1,21 @@
+[Unit]
+Description=Hydra Printer Touchscreen UI
+After=hydra-host.service
+Wants=hydra-host.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/hydra-ui -platform eglfs
+Restart=on-failure
+RestartSec=3
+User=hydra
+Group=hydra
+Environment=QT_QPA_PLATFORM=eglfs
+Environment=QT_QPA_EGLFS_KMS_ATOMIC=1
+Environment=QT_QUICK_CONTROLS_STYLE=Material
+Environment=QT_QUICK_CONTROLS_MATERIAL_THEME=Dark
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

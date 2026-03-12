@@ -1,0 +1,20 @@
+[Unit]
+Description=Hydra Printer Host Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/hydra-host /etc/hydra/hydra.toml
+Restart=on-failure
+RestartSec=3
+User=hydra
+Group=hydra
+StandardOutput=journal
+StandardError=journal
+
+# Safety: stop gracefully, then kill
+TimeoutStopSec=10
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

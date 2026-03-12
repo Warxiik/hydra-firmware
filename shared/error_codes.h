@@ -1,0 +1,20 @@
+#ifndef HYDRA_ERROR_CODES_H
+#define HYDRA_ERROR_CODES_H
+
+/* Shared error codes used by both host and MCU. */
+
+typedef enum {
+    HYDRA_OK = 0,
+    HYDRA_ERR_BAD_CMD,
+    HYDRA_ERR_BAD_CRC,
+    HYDRA_ERR_BAD_FRAME,
+    HYDRA_ERR_QUEUE_OVERFLOW,
+    HYDRA_ERR_OVERTEMP,
+    HYDRA_ERR_WATCHDOG,
+    HYDRA_ERR_ENDSTOP,
+    HYDRA_ERR_TMC_COMM,
+    HYDRA_ERR_TIMEOUT,
+    HYDRA_ERR_INVALID_PARAM,
+} hydra_error_t;
+
+#endif /* HYDRA_ERROR_CODES_H */
