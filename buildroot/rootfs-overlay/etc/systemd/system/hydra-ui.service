@@ -1,0 +1,27 @@
+[Unit]
+Description=Hydra Printer Touchscreen UI (Chromium Kiosk)
+After=hydra-host.service
+Wants=hydra-host.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/chromium-browser \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-session-crashed-bubble \
+  --disable-restore-session-state \
+  --window-size=1280,720 \
+  --window-position=0,0 \
+  --check-for-update-interval=31536000 \
+  --ozone-platform=drm \
+  http://localhost:5000
+Restart=on-failure
+RestartSec=3
+User=hydra
+Group=hydra
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

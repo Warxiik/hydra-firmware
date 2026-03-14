@@ -1,0 +1,6 @@
+config BR2_PACKAGE_HYDRA_UI
+	bool "hydra-ui"
+	help
+	  Hydra 3D printer web UI.
+	  Pre-built React + TypeScript application served by hydra-host
+	  on port 5000 (also used in Chromium kiosk on the touchscreen).

@@ -226,4 +226,96 @@ bool TmcConfig::set_enabled(bool enabled) {
     return mcu_.tmc_write(0, tmc_reg::GCONF, enabled ? 0 : 1);
 }
 
+bool TmcConfig::enable_stallguard(uint8_t driver_id, uint8_t threshold,
+                                   double homing_speed_mm_s, double steps_per_mm) {
+    spdlog::info("TMC{}: enabling StallGuard (threshold={}, speed={:.0f}mm/s)",
+                 driver_id, threshold, homing_speed_mm_s);
+
+    auto reg_delay = [](){ std::this_thread::sleep_for(std::chrono::milliseconds(2)); };
+
+    /*
+     * 1. Switch to SpreadCycle mode — StallGuard4 only works in SpreadCycle.
+     *    GCONF: en_spreadCycle = 1, diag0_stall = 1 (DIAG pin outputs stall event)
+     */
+    uint32_t gconf = 0;
+    gconf |= (1u << 0);  /* I_scale_analog */
+    gconf |= (1u << 2);  /* en_spreadCycle = 1 (force SpreadCycle for StallGuard) */
+    gconf |= (1u << 6);  /* multistep_filt = 1 */
+    gconf |= (1u << 7);  /* diag0_stall = 1 (DIAG pin outputs stallGuard event) */
+
+    if (!mcu_.tmc_write(driver_id, tmc_reg::GCONF, gconf)) {
+        spdlog::error("TMC{}: failed to set GCONF for StallGuard", driver_id);
+        return false;
+    }
+    reg_delay();
+
+    /*
+     * 2. Set SGTHRS — StallGuard threshold.
+     *    SG_RESULT < SGTHRS*2 triggers stall. Higher = more sensitive.
+     */
+    if (!mcu_.tmc_write(driver_id, tmc_reg::SGTHRS, threshold)) {
+        spdlog::error("TMC{}: failed to set SGTHRS", driver_id);
+        return false;
+    }
+    reg_delay();
+
+    /*
+     * 3. Set TCOOLTHRS — velocity threshold for StallGuard activation.
+     *    StallGuard is only active when TSTEP < TCOOLTHRS.
+     *    TSTEP = f_clk / (velocity * 256) for 256 microsteps.
+     *
+     *    For TMC2209 at 12MHz clock:
+     *    TCOOLTHRS = f_clk / (speed_steps_per_s * 256_microstep_factor)
+     *
+     *    We set TCOOLTHRS slightly above the homing speed so StallGuard is
+     *    active during the homing move. Using a generous margin.
+     */
+    double speed_steps_s = homing_speed_mm_s * steps_per_mm;
+    /* TSTEP at homing speed (in clock cycles per microstep) */
+    uint32_t tcoolthrs = 0;
+    if (speed_steps_s > 0) {
+        /* TMC2209 internal clock is ~12MHz */
+        tcoolthrs = static_cast<uint32_t>(12000000.0 / (speed_steps_s * 256.0));
+        /* Add 20% margin so StallGuard is active at homing speed */
+        tcoolthrs = static_cast<uint32_t>(tcoolthrs * 1.2);
+        if (tcoolthrs > 0xFFFFF) tcoolthrs = 0xFFFFF; /* 20-bit max */
+    }
+
+    if (!mcu_.tmc_write(driver_id, tmc_reg::TCOOLTHRS, tcoolthrs)) {
+        spdlog::warn("TMC{}: failed to set TCOOLTHRS", driver_id);
+    }
+    reg_delay();
+
+    spdlog::info("TMC{}: StallGuard enabled (TCOOLTHRS={})", driver_id, tcoolthrs);
+    return true;
+}
+
+bool TmcConfig::disable_stallguard(uint8_t driver_id, const TmcDriverConfig& cfg) {
+    spdlog::info("TMC{}: disabling StallGuard, restoring normal mode", driver_id);
+
+    auto reg_delay = [](){ std::this_thread::sleep_for(std::chrono::milliseconds(2)); };
+
+    /* Restore GCONF to normal operating mode (no DIAG stall output) */
+    if (!mcu_.tmc_write(driver_id, tmc_reg::GCONF, build_gconf(cfg))) {
+        spdlog::warn("TMC{}: failed to restore GCONF", driver_id);
+        return false;
+    }
+    reg_delay();
+
+    /* Clear TCOOLTHRS (disable CoolStep/StallGuard velocity window) */
+    if (!mcu_.tmc_write(driver_id, tmc_reg::TCOOLTHRS, 0)) {
+        spdlog::warn("TMC{}: failed to clear TCOOLTHRS", driver_id);
+    }
+    reg_delay();
+
+    return true;
+}
+
+bool TmcConfig::read_stallguard(uint8_t driver_id, uint16_t& sg_result) {
+    auto val = mcu_.tmc_read(driver_id, tmc_reg::SG_RESULT);
+    if (!val) return false;
+    sg_result = static_cast<uint16_t>(*val & 0x3FF); /* 10-bit result */
+    return true;
+}
+
 } // namespace hydra::drivers

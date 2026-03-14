@@ -2,6 +2,7 @@
 
 #include "../comms/mcu_proxy.h"
 #include "../core/config.h"
+#include "../drivers/tmc_config.h"
 #include "protocol_defs.h"
 #include <cstdint>
 #include <functional>
@@ -46,9 +47,12 @@ public:
         double max_travel_mm;    /* mm before giving up */
         double steps_per_mm;
         bool invert_dir;         /* True if endstop is in positive direction */
+        bool sensorless;         /* True = use TMC2209 StallGuard instead of physical endstops */
+        uint8_t stall_threshold; /* StallGuard threshold (0-255, only if sensorless) */
     };
 
-    HomingSequence(comms::McuProxy& mcu, const AxisConfig& config);
+    HomingSequence(comms::McuProxy& mcu, const AxisConfig& config,
+                   drivers::TmcConfig* tmc = nullptr);
 
     /** Start the homing sequence. */
     void start();
@@ -64,6 +68,7 @@ private:
     void enter_phase(Phase phase);
 
     comms::McuProxy& mcu_;
+    drivers::TmcConfig* tmc_;  /* Non-null if sensorless homing available */
     AxisConfig config_;
     Phase phase_ = Phase::Idle;
     uint32_t phase_ticks_ = 0;
@@ -75,7 +80,8 @@ private:
  */
 class HomingController {
 public:
-    HomingController(comms::McuProxy& mcu, const Config& config);
+    HomingController(comms::McuProxy& mcu, const Config& config,
+                     drivers::TmcConfig* tmc = nullptr);
 
     /** Start homing all axes. */
     void start(bool x, bool y, bool z);
@@ -89,6 +95,7 @@ public:
 private:
     comms::McuProxy& mcu_;
     const Config& config_;
+    drivers::TmcConfig* tmc_;
 
     bool active_ = false;
     bool succeeded_ = false;

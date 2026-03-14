@@ -1,0 +1,42 @@
+# Hydra Printer — Default Machine Configuration
+
+[mcu]
+spi_device = "/dev/spidev0.0"
+spi_speed_hz = 4_000_000
+
+[printer]
+bed_x = 220.0  # mm
+bed_y = 220.0
+bed_z = 250.0
+nozzle_count = 2
+
+[motion]
+max_velocity = 300.0         # mm/s
+max_acceleration = 3000.0    # mm/s^2
+max_z_velocity = 10.0
+max_z_acceleration = 100.0
+junction_deviation = 0.05    # mm
+
+[stepper]
+steps_per_mm_xy = 80.0       # CoreXY A/B (20T pulley, 2mm GT2, 16 microstep)
+steps_per_mm_z = 400.0       # T8 leadscrew, 16 microstep
+steps_per_mm_e = 93.0        # BMG-style extruder, 16 microstep
+steps_per_mm_offset = 40.0   # Nozzle offset actuators
+
+[thermal.nozzle_pid]
+kp = 20.0
+ki = 1.0
+kd = 100.0
+
+[thermal.bed_pid]
+kp = 10.0
+ki = 0.5
+kd = 200.0
+
+[paths]
+gcode_dir = "/home/hydra/gcodes"
+log_dir = "/var/log/hydra"
+
+[display]
+brightness = 80  # percent
+screensaver_timeout = 300  # seconds

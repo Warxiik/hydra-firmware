@@ -1,0 +1,10 @@
+config BR2_PACKAGE_HYDRA_HOST
+	bool "hydra-host"
+	depends on BR2_INSTALL_LIBSTDCPP
+	depends on BR2_TOOLCHAIN_GCC_AT_LEAST_14
+	select BR2_PACKAGE_SPDLOG
+	select BR2_PACKAGE_NLOHMANN_JSON
+	help
+	  Hydra 3D printer host daemon.
+	  Manages G-code parsing, motion planning, thermal control,
+	  and communication with the RP2040 MCU via SPI.

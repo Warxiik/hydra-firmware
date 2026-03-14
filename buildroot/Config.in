@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_HYDRA_PATH/package/hydra-host/Config.in"
+source "$BR2_EXTERNAL_HYDRA_PATH/package/hydra-ui/Config.in"

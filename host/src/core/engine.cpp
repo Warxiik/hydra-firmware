@@ -534,7 +534,7 @@ void Engine::home_axes(bool x, bool y, bool z) {
     if (state_ != PrinterState::Idle && state_ != PrinterState::Printing) return;
     spdlog::info("Homing axes: X={} Y={} Z={}", x, y, z);
 
-    homing_ctrl_ = std::make_unique<motion::HomingController>(*mcu_, config_);
+    homing_ctrl_ = std::make_unique<motion::HomingController>(*mcu_, config_, tmc_config_.get());
     homing_ctrl_->start(x, y, z);
     state_ = PrinterState::Homing;
 }

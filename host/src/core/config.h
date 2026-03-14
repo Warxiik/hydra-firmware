@@ -49,6 +49,8 @@ struct Config {
         double backoff_mm = 5.0;        /* Distance to back off after endstop hit */
         double max_travel_xy = 250.0;   /* Max distance to travel before giving up */
         double max_travel_z = 260.0;
+        bool sensorless_xy = false;     /* Use StallGuard for X/Y homing */
+        uint8_t stall_threshold_xy = 80; /* StallGuard threshold for X/Y (0-255) */
     };
     Homing homing;
 

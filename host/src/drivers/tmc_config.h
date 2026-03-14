@@ -65,6 +65,30 @@ public:
     /** Enable/disable all stepper drivers via the global enable pin. */
     bool set_enabled(bool enabled);
 
+    /**
+     * Prepare a driver for sensorless homing (StallGuard4).
+     * Switches to SpreadCycle, enables DIAG output, sets TCOOLTHRS
+     * for the homing velocity, and sets SGTHRS threshold.
+     *
+     * @param driver_id  Stepper channel (0-6)
+     * @param threshold  StallGuard threshold (0-255, higher = less sensitive)
+     * @param homing_speed_mm_s  Homing speed to calculate TCOOLTHRS
+     * @param steps_per_mm  Steps/mm for TCOOLTHRS calculation
+     */
+    bool enable_stallguard(uint8_t driver_id, uint8_t threshold,
+                           double homing_speed_mm_s, double steps_per_mm);
+
+    /**
+     * Restore normal operating mode after sensorless homing.
+     * Disables DIAG output, restores StealthChop if configured.
+     */
+    bool disable_stallguard(uint8_t driver_id, const TmcDriverConfig& cfg);
+
+    /**
+     * Read StallGuard result value (0-510, lower = more load).
+     */
+    bool read_stallguard(uint8_t driver_id, uint16_t& sg_result);
+
 private:
     /** Map driver_id (0-6) to TMC bus + address. */
     struct BusAddr {

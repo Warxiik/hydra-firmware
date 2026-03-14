@@ -35,7 +35,7 @@
 - [x] **2.8** Host: Homing sequence (G28) — fast approach, slow probe, backoff
 - [x] **2.9** MCU: TMC2209 UART via PIO (single-wire half-duplex, 4 drivers per bus)
 - [x] **2.10** Host: TMC2209 configuration (current, microstepping, StealthChop/SpreadCycle)
-- [ ] **2.11** Host: Sensorless homing via StallGuard (optional)
+- [x] **2.11** Host: Sensorless homing via StallGuard (optional)
 
 **Tests:** Kinematics transforms, planner velocity limits, homing repeatability
 
@@ -103,7 +103,7 @@
 - [x] **5.9** Host: M600 filament change (pause, retract, UI prompt, resume)
 - [x] **5.10** UI: Filament change dialog + animation
 - [x] **5.11** CI: GitHub Actions (build host x86+ARM, build MCU, lint, tests)
-- [ ] **5.12** Build: Yocto/Buildroot SD card image (meta-hydra layer)
+- [x] **5.12** Build: Yocto/Buildroot SD card image (meta-hydra layer)
 - [ ] **5.13** Docs: User manual, build guide, API reference
 - [ ] **5.14** QA: Extended print testing (8h+ prints, thermal cycling, WiFi stability)
 
@@ -117,9 +117,7 @@
 **Build:** `hydra-host.exe` compiles (C++20, GCC 14.2), 15 tests passing
 **Next steps:**
 - 1.12: Hardware integration test with real RP2040
-- 2.11: Sensorless homing via StallGuard (optional)
 - 3.16: First single-nozzle calibration cube print
 - 4.13: Dual-nozzle test prints
-- 5.12: Yocto/Buildroot SD card image
 - 5.13: Docs — user manual, build guide, API reference
 - 5.14: QA — extended print testing
