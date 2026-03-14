@@ -3,6 +3,7 @@
 #include "hardware/pio.h"
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
+#include "hardware/sync.h"
 #include "step_dir_sr.pio.h"
 
 static stepper_channel_t channels[STEPPER_COUNT];
