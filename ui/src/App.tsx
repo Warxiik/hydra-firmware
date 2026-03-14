@@ -22,7 +22,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: typeof Home }[] = [
 
 export default function App() {
   const [page, setPage] = useState<Page>('home');
-  const { state, controls } = usePrinter();
+  const { state, controls, connected } = usePrinter();
 
   const renderPage = () => {
     switch (page) {
@@ -37,7 +37,7 @@ export default function App() {
 
   return (
     <>
-      <StatusBar state={state} />
+      <StatusBar state={state} connected={connected} />
 
       <main className="flex-1 overflow-hidden">
         {renderPage()}

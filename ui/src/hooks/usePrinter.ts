@@ -47,7 +47,7 @@ const INITIAL_STATE: PrinterState = {
 };
 
 /* Demo mode: simulate a printing state for UI development */
-function useMockPrinter(): PrinterState {
+function useMockPrinter(): { state: PrinterState; updateState: (patch: Partial<PrinterState>) => void } {
   const [state, setState] = useState<PrinterState>({
     ...INITIAL_STATE,
     state: 'printing',
@@ -92,7 +92,11 @@ function useMockPrinter(): PrinterState {
     return () => clearInterval(iv);
   }, []);
 
-  return state;
+  const updateState = useCallback((patch: Partial<PrinterState>) => {
+    setState(prev => ({ ...prev, ...patch }));
+  }, []);
+
+  return { state, updateState };
 }
 
 export interface PrinterControls {
@@ -110,21 +114,52 @@ export interface PrinterControls {
   setFanSpeed: (percent: number) => void;
 }
 
-export function usePrinter(): { state: PrinterState; controls: PrinterControls } {
+export function usePrinter(): { state: PrinterState; controls: PrinterControls; connected: boolean } {
   const wsRef = useRef<WebSocket | null>(null);
-  const [, setConnected] = useState(false);
-  const mockState = useMockPrinter();
+  const [connected, setConnected] = useState(false);
+  const [liveState, setLiveState] = useState<PrinterState>(INITIAL_STATE);
+  const historyRef = useRef<PrinterState['tempHistory']>([]);
+  const mock = useMockPrinter();
 
-  /* Try WebSocket, fall back to mock */
+  /* Connect to real WebSocket when available */
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
     try {
       const ws = new WebSocket(wsUrl);
-      ws.onopen = () => { setConnected(true); wsRef.current = ws; };
-      ws.onclose = () => { setConnected(false); wsRef.current = null; };
-      ws.onerror = () => { setConnected(false); };
+
+      ws.onopen = () => {
+        setConnected(true);
+        wsRef.current = ws;
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          /* Accumulate temp history from live updates */
+          const now = Date.now() / 1000;
+          historyRef.current = [
+            ...historyRef.current,
+            { time: now, n0: data.nozzle0Temp, n1: data.nozzle1Temp, bed: data.bedTemp },
+          ].slice(-120);
+
+          setLiveState({
+            ...data,
+            tempHistory: historyRef.current,
+          });
+        } catch { /* ignore malformed messages */ }
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        wsRef.current = null;
+      };
+
+      ws.onerror = () => {
+        setConnected(false);
+      };
+
       return () => ws.close();
     } catch {
       /* WebSocket not available — mock mode */
@@ -152,5 +187,6 @@ export function usePrinter(): { state: PrinterState; controls: PrinterControls }
     setFanSpeed: (percent) => send('set_fan', { percent }),
   };
 
-  return { state: mockState, controls };
+  /* Use live data when connected, mock data when not */
+  return { state: connected ? liveState : mock.state, controls, connected };
 }

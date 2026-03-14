@@ -44,7 +44,7 @@ function TempChip({ label, temp, target, color }: {
   );
 }
 
-export function StatusBar({ state }: { state: PrinterState }) {
+export function StatusBar({ state, connected = false }: { state: PrinterState; connected?: boolean }) {
   const stateInfo = STATE_LABELS[state.state] || STATE_LABELS.idle;
 
   return (
@@ -82,8 +82,19 @@ export function StatusBar({ state }: { state: PrinterState }) {
         <TempChip label="BED" temp={state.bedTemp} target={state.bedTarget} color="var(--color-text-dim)" />
       </div>
 
-      {/* Right: WiFi */}
+      {/* Right: Connection + WiFi */}
       <div className="flex items-center gap-2">
+        {!connected && (
+          <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded"
+            style={{
+              color: 'var(--color-warning)',
+              background: 'var(--color-warning)15',
+              border: '1px solid var(--color-warning)30',
+              fontFamily: 'var(--font-mono)',
+            }}>
+            DEMO
+          </span>
+        )}
         <span className="text-[10px]" style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
           {state.ipAddress}
         </span>

@@ -22,7 +22,47 @@ FetchContent_Declare(json
     GIT_TAG v3.11.3
 )
 
+# Crow (HTTP + WebSocket server) — use master for ASIO compat
+FetchContent_Declare(crow
+    GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
+    GIT_TAG master
+)
+
+# Standalone ASIO (required by Crow) — use 1.28 for Crow compat
+FetchContent_Declare(asio
+    GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
+    GIT_TAG asio-1-28-0
+)
+
 FetchContent_MakeAvailable(spdlog tomlplusplus json)
+
+# Fetch Crow and ASIO
+FetchContent_GetProperties(crow)
+if(NOT crow_POPULATED)
+    FetchContent_Populate(crow)
+endif()
+
+FetchContent_GetProperties(asio)
+if(NOT asio_POPULATED)
+    FetchContent_Populate(asio)
+endif()
+
+# Create ASIO interface library
+add_library(asio_standalone INTERFACE)
+target_include_directories(asio_standalone INTERFACE ${asio_SOURCE_DIR}/asio/include)
+target_compile_definitions(asio_standalone INTERFACE
+    ASIO_STANDALONE
+    ASIO_NO_DEPRECATED
+)
+if(WIN32)
+    target_link_libraries(asio_standalone INTERFACE ws2_32 wsock32)
+endif()
+
+# Create Crow interface library
+add_library(crow_lib INTERFACE)
+target_include_directories(crow_lib INTERFACE ${crow_SOURCE_DIR}/include)
+target_link_libraries(crow_lib INTERFACE asio_standalone)
+target_compile_definitions(crow_lib INTERFACE CROW_DISABLE_STATIC_DIR)
 
 # Host executable
 add_executable(hydra-host
@@ -46,6 +86,7 @@ add_executable(hydra-host
     src/comms/protocol.cpp
     src/comms/clock_sync.cpp
     src/comms/mcu_proxy.cpp
+    src/web/server.cpp
 )
 
 target_include_directories(hydra-host PRIVATE
@@ -58,6 +99,7 @@ target_link_libraries(hydra-host PRIVATE
     spdlog::spdlog
     tomlplusplus::tomlplusplus
     nlohmann_json::nlohmann_json
+    crow_lib
     pthread
 )
 
