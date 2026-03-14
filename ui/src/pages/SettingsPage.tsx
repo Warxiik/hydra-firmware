@@ -51,7 +51,7 @@ function SettingsLink({ label, onClick }: { label: string; onClick?: () => void 
   );
 }
 
-export function SettingsPage({ state }: { state: PrinterState }) {
+export function SettingsPage({ state, onNavigate }: { state: PrinterState; onNavigate?: (page: 'network') => void }) {
   return (
     <div className="flex-1 overflow-y-auto p-5 animate-fade-in">
       <div className="max-w-[900px] mx-auto grid grid-cols-2 gap-4">
@@ -60,7 +60,7 @@ export function SettingsPage({ state }: { state: PrinterState }) {
             <SettingsRow label="WiFi SSID" value={state.wifiSSID} mono={false} />
             <SettingsRow label="IP Address" value={state.ipAddress} />
             <SettingsRow label="Status" value={state.wifiConnected ? 'Connected' : 'Disconnected'} mono={false} />
-            <SettingsLink label="Configure WiFi" />
+            <SettingsLink label="Configure WiFi" onClick={() => onNavigate?.('network')} />
           </div>
         </SettingsCard>
 

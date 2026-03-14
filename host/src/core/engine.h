@@ -11,6 +11,7 @@
 #include "../comms/mcu_proxy.h"
 #include "../drivers/tmc_config.h"
 #include "../files/file_manager.h"
+#include "ota.h"
 #include <atomic>
 #include <string>
 #include <memory>
@@ -69,6 +70,9 @@ public:
     /* File manager access (for web server) */
     files::FileManager& file_manager() { return *file_manager_; }
 
+    /* OTA update manager (for web server) */
+    OtaManager& ota_manager() { return *ota_manager_; }
+
 private:
     void control_loop_tick(double dt_s);
     void tick_thermal(double dt_s);
@@ -95,6 +99,7 @@ private:
     std::unique_ptr<drivers::TmcConfig> tmc_config_;
     std::unique_ptr<files::FileManager> file_manager_;
     std::unique_ptr<CheckpointManager> checkpoint_mgr_;
+    std::unique_ptr<OtaManager> ota_manager_;
 
     /* Timing */
     std::chrono::steady_clock::time_point last_tick_;

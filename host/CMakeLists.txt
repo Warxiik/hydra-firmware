@@ -84,6 +84,7 @@ add_executable(hydra-host
     src/drivers/tmc_config.cpp
     src/files/file_manager.cpp
     src/core/checkpoint.cpp
+    src/core/ota.cpp
     src/thermal/pid.cpp
     src/thermal/heater.cpp
     src/thermal/thermistor.cpp

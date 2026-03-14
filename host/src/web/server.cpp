@@ -217,6 +217,47 @@ void WebServer::server_thread() {
                 ok ? R"({"ok":true})" : R"({"error":"not found"})");
         });
 
+    /* ── OTA Update ────────────────────────────────────────────── */
+
+    CROW_ROUTE(app, "/api/ota/status").methods(crow::HTTPMethod::GET)(
+        [this]() {
+            auto& ota = engine_.ota_manager();
+            auto prog = ota.progress();
+            json j;
+            j["state"] = static_cast<int>(prog.state);
+            j["percent"] = prog.percent;
+            j["message"] = prog.message;
+            j["currentVersion"] = ota.current_version();
+            j["availableVersion"] = ota.available_version();
+            j["updateAvailable"] = ota.update_available();
+            return crow::response(j.dump());
+        });
+
+    CROW_ROUTE(app, "/api/ota/check").methods(crow::HTTPMethod::POST)(
+        [this](const crow::request& req) {
+            auto body = json::parse(req.body, nullptr, false);
+            std::string url = body.is_discarded() ? "" : body.value("url", "");
+            bool found = engine_.ota_manager().check_update(url);
+            json j;
+            j["updateAvailable"] = found;
+            j["version"] = engine_.ota_manager().available_version();
+            return crow::response(j.dump());
+        });
+
+    CROW_ROUTE(app, "/api/ota/upload").methods(crow::HTTPMethod::POST)(
+        [this](const crow::request& req) {
+            auto body = json::parse(req.body, nullptr, false);
+            if (body.is_discarded() || !body.contains("name") || !body.contains("data"))
+                return crow::response(400, R"({"error":"missing name or data"})");
+
+            std::string name = body["name"].get<std::string>();
+            std::string data = body["data"].get<std::string>();
+
+            bool ok = engine_.ota_manager().upload_and_install(name, data);
+            return crow::response(ok ? 200 : 500,
+                ok ? R"({"ok":true})" : R"({"error":"update failed"})");
+        });
+
     CROW_ROUTE(app, "/api/files/disk").methods(crow::HTTPMethod::GET)(
         [this]() {
             auto space = engine_.file_manager().disk_space();
@@ -281,6 +322,9 @@ void WebServer::server_thread() {
             }
             else if (type == "set_fan") {
                 engine_.set_fan_speed(0, msg.value("percent", 0));
+            }
+            else if (type == "filament_change_confirm") {
+                engine_.filament_change_confirm();
             }
         });
 

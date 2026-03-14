@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface PrinterState {
-  state: 'idle' | 'homing' | 'heating' | 'printing' | 'paused' | 'error';
+  state: 'idle' | 'homing' | 'heating' | 'printing' | 'paused' | 'filament_change' | 'error';
   nozzle0Temp: number;
   nozzle0Target: number;
   nozzle1Temp: number;
@@ -112,6 +112,7 @@ export interface PrinterControls {
   setSpeedOverride: (percent: number) => void;
   setFlowOverride: (percent: number) => void;
   setFanSpeed: (percent: number) => void;
+  filamentChangeConfirm: () => void;
 }
 
 export function usePrinter(): { state: PrinterState; controls: PrinterControls; connected: boolean } {
@@ -185,6 +186,7 @@ export function usePrinter(): { state: PrinterState; controls: PrinterControls; 
     setSpeedOverride: (percent) => send('set_speed', { percent }),
     setFlowOverride: (percent) => send('set_flow', { percent }),
     setFanSpeed: (percent) => send('set_fan', { percent }),
+    filamentChangeConfirm: () => send('filament_change_confirm'),
   };
 
   /* Use live data when connected, mock data when not */

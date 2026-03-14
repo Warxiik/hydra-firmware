@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Home, Wrench, Printer, FolderOpen, Settings, Move } from 'lucide-react';
 import { StatusBar } from './components/StatusBar';
+import { FilamentChangeDialog } from './components/FilamentChangeDialog';
 import { HomePage } from './pages/HomePage';
 import { PrintPage } from './pages/PrintPage';
 import { PreparePage } from './pages/PreparePage';
 import { MovePage } from './pages/MovePage';
 import { FilesPage } from './pages/FilesPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { NetworkPage } from './pages/NetworkPage';
 import { usePrinter } from './hooks/usePrinter';
 
-type Page = 'home' | 'prepare' | 'print' | 'files' | 'settings' | 'move';
+type Page = 'home' | 'prepare' | 'print' | 'files' | 'settings' | 'move' | 'network';
 
 const NAV_ITEMS: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'home',    label: 'Home',    icon: Home },
@@ -24,6 +26,8 @@ export default function App() {
   const [page, setPage] = useState<Page>('home');
   const { state, controls, connected } = usePrinter();
 
+  const navigate = (p: Page) => setPage(p);
+
   const renderPage = () => {
     switch (page) {
       case 'home':     return <HomePage state={state} controls={controls} />;
@@ -31,7 +35,8 @@ export default function App() {
       case 'print':    return <PrintPage state={state} controls={controls} />;
       case 'move':     return <MovePage controls={controls} />;
       case 'files':    return <FilesPage controls={controls} />;
-      case 'settings': return <SettingsPage state={state} />;
+      case 'settings': return <SettingsPage state={state} onNavigate={navigate} />;
+      case 'network':  return <NetworkPage state={state} onBack={() => setPage('settings')} />;
     }
   };
 
@@ -89,6 +94,11 @@ export default function App() {
           );
         })}
       </nav>
+
+      {/* Filament change overlay */}
+      {state.state === 'filament_change' && (
+        <FilamentChangeDialog nozzle={0} onConfirm={controls.filamentChangeConfirm} />
+      )}
     </>
   );
 }

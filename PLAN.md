@@ -97,12 +97,12 @@
 - [x] **5.3** UI: FilesPage (file browser, print preview, start print)
 - [x] **5.4** UI: PrintPage overrides (mid-print speed %, flow %, fan %, Z offset)
 - [x] **5.5** UI: SettingsPage (machine config, PID tune, network, about)
-- [ ] **5.6** UI: NetworkPage (WiFi scan/connect, IP display, captive portal)
+- [x] **5.6** UI: NetworkPage (WiFi scan/connect, IP display, captive portal)
 - [x] **5.7** Host: Print recovery (periodic state checkpoint to eMMC, resume after power loss)
-- [ ] **5.8** Host: OTA firmware update (host software + MCU .uf2 via UI/web)
+- [x] **5.8** Host: OTA firmware update (host software + MCU .uf2 via UI/web)
 - [x] **5.9** Host: M600 filament change (pause, retract, UI prompt, resume)
-- [ ] **5.10** UI: Filament change dialog + animation
-- [ ] **5.11** CI: GitHub Actions (build host x86+ARM, build MCU, lint, tests)
+- [x] **5.10** UI: Filament change dialog + animation
+- [x] **5.11** CI: GitHub Actions (build host x86+ARM, build MCU, lint, tests)
 - [ ] **5.12** Build: Yocto/Buildroot SD card image (meta-hydra layer)
 - [ ] **5.13** Docs: User manual, build guide, API reference
 - [ ] **5.14** QA: Extended print testing (8h+ prints, thermal cycling, WiFi stability)
@@ -117,8 +117,9 @@
 **Build:** `hydra-host.exe` compiles (C++20, GCC 14.2), 15 tests passing
 **Next steps:**
 - 1.12: Hardware integration test with real RP2040
-- 5.6: UI NetworkPage (WiFi scan/connect)
-- 5.8: OTA firmware update
-- 5.10: UI filament change dialog
-- 5.11: CI — GitHub Actions build pipeline
+- 2.11: Sensorless homing via StallGuard (optional)
+- 3.16: First single-nozzle calibration cube print
 - 4.13: Dual-nozzle test prints
+- 5.12: Yocto/Buildroot SD card image
+- 5.13: Docs — user manual, build guide, API reference
+- 5.14: QA — extended print testing

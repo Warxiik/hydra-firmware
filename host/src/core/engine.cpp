@@ -56,6 +56,9 @@ Engine::Engine(const Config& config) : config_(config) {
 
     /* Create checkpoint manager */
     checkpoint_mgr_ = std::make_unique<CheckpointManager>(config.log_dir);
+
+    /* Create OTA update manager */
+    ota_manager_ = std::make_unique<OtaManager>();
 }
 
 Engine::~Engine() {
