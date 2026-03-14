@@ -2,6 +2,7 @@
 #include "pins.h"
 #include "config.h"
 #include "hardware/pio.h"
+#include "hardware/clocks.h"
 #include "pico/time.h"
 #include "tmc_uart.pio.h"
 
