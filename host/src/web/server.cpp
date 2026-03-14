@@ -120,7 +120,19 @@ void WebServer::server_thread() {
         });
 
     CROW_ROUTE(app, "/api/home").methods(crow::HTTPMethod::POST)(
-        [this]() { engine_.home_all(); return crow::response(R"({"ok":true})"); });
+        [this](const crow::request& req) {
+            auto body = json::parse(req.body, nullptr, false);
+            if (!body.is_discarded() && body.contains("axes")) {
+                std::string axes = body["axes"].get<std::string>();
+                bool x = axes.find('X') != std::string::npos || axes.find('x') != std::string::npos;
+                bool y = axes.find('Y') != std::string::npos || axes.find('y') != std::string::npos;
+                bool z = axes.find('Z') != std::string::npos || axes.find('z') != std::string::npos;
+                engine_.home_axes(x, y, z);
+            } else {
+                engine_.home_all();
+            }
+            return crow::response(R"({"ok":true})");
+        });
 
     CROW_ROUTE(app, "/api/jog").methods(crow::HTTPMethod::POST)(
         [this](const crow::request& req) {

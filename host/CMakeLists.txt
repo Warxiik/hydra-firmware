@@ -80,6 +80,7 @@ add_executable(hydra-host
     src/motion/collision.cpp
     src/motion/frame_decompose.cpp
     src/motion/homing.cpp
+    src/motion/calibration.cpp
     src/drivers/tmc_config.cpp
     src/files/file_manager.cpp
     src/core/checkpoint.cpp

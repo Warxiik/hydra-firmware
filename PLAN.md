@@ -81,7 +81,7 @@
 - [x] **4.9** Host: Nozzle collision validator (offset actuator range limits, exclusion zones)
 - [x] **4.10** UI: Dual-nozzle PrintPage (progress per nozzle, dual temp display)
 - [x] **4.11** UI: NozzleIndicator component (left=blue, right=orange)
-- [ ] **4.12** Nozzle alignment calibration routine
+- [x] **4.12** Nozzle alignment calibration routine
 - [ ] **4.13** Dual-nozzle test prints (stress test with various geometries)
 
 **Tests:** Sync engine with mock streams (barriers, tasks, edge cases), collision validator, dual planner
@@ -117,8 +117,8 @@
 **Build:** `hydra-host.exe` compiles (C++20, GCC 14.2), 15 tests passing
 **Next steps:**
 - 1.12: Hardware integration test with real RP2040
-- 4.12: Nozzle alignment calibration routine
 - 5.6: UI NetworkPage (WiFi scan/connect)
 - 5.8: OTA firmware update
 - 5.10: UI filament change dialog
 - 5.11: CI — GitHub Actions build pipeline
+- 4.13: Dual-nozzle test prints
