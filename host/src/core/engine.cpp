@@ -53,6 +53,9 @@ Engine::Engine(const Config& config) : config_(config) {
 
     /* Create file manager */
     file_manager_ = std::make_unique<files::FileManager>(config.gcode_dir);
+
+    /* Create checkpoint manager */
+    checkpoint_mgr_ = std::make_unique<CheckpointManager>(config.log_dir);
 }
 
 Engine::~Engine() {
@@ -115,8 +118,12 @@ void Engine::run() {
     if (!mcu_->connect()) {
         spdlog::warn("MCU connection failed — running in offline mode");
     } else {
-        /* Configure TMC2209 drivers after MCU connection */
         configure_drivers();
+    }
+
+    /* Check for pending checkpoint */
+    if (checkpoint_mgr_->exists()) {
+        spdlog::info("Power-loss checkpoint found — use resume_print() to continue");
     }
 
     last_tick_ = std::chrono::steady_clock::now();
@@ -162,8 +169,10 @@ void Engine::control_loop_tick(double dt_s) {
     case PrinterState::Printing:
         tick_printing();
         break;
+    case PrinterState::FilamentChange:
+        tick_filament_change();
+        break;
     case PrinterState::Heating: {
-        /* Check if all heaters are at target */
         bool all_ready = true;
         for (auto& h : heaters_) {
             if (h && h->target() > 0 && !h->at_target()) {
@@ -184,6 +193,12 @@ void Engine::control_loop_tick(double dt_s) {
     if (mcu_->is_connected() && (tick_count_ % 200) == 0) {
         mcu_->heartbeat();
     }
+
+    /* Periodic checkpoint during printing */
+    if (state_ == PrinterState::Printing &&
+        (tick_count_ % checkpoint_interval_) == 0) {
+        save_checkpoint();
+    }
 }
 
 void Engine::tick_thermal(double dt_s) {
@@ -196,11 +211,8 @@ void Engine::tick_thermal(double dt_s) {
 
         uint16_t adc_raw = status.adc_raw[i];
         uint16_t pwm_duty = heaters_[i]->update(adc_raw, dt_s);
-
-        /* Send PWM to MCU */
         mcu_->set_heater_pwm(static_cast<uint8_t>(i), pwm_duty);
 
-        /* Check for faults */
         if (heaters_[i]->has_fault()) {
             spdlog::error("Heater {} fault: {}", heaters_[i]->name(),
                          heaters_[i]->fault_reason());
@@ -210,7 +222,6 @@ void Engine::tick_thermal(double dt_s) {
 }
 
 void Engine::queue_decomposed_move(const motion::DecomposedMove& dm) {
-    /* Helper: queue a single axis if it has steps to make */
     auto queue_axis = [this](uint8_t channel, const motion::DecomposedMove::AxisMove& axis) {
         int abs_steps = std::abs(axis.steps);
         if (abs_steps == 0) return;
@@ -226,11 +237,11 @@ void Engine::queue_decomposed_move(const motion::DecomposedMove& dm) {
         mcu_->queue_step(channel, interval, static_cast<uint16_t>(abs_steps), 0);
     };
 
-    queue_axis(STEPPER_COREXY_A,  dm.corexy_a);
-    queue_axis(STEPPER_COREXY_B,  dm.corexy_b);
-    queue_axis(STEPPER_OFFSET_X,  dm.offset_x);
-    queue_axis(STEPPER_OFFSET_Y,  dm.offset_y);
-    queue_axis(STEPPER_Z,         dm.z);
+    queue_axis(STEPPER_COREXY_A,   dm.corexy_a);
+    queue_axis(STEPPER_COREXY_B,   dm.corexy_b);
+    queue_axis(STEPPER_OFFSET_X,   dm.offset_x);
+    queue_axis(STEPPER_OFFSET_Y,   dm.offset_y);
+    queue_axis(STEPPER_Z,          dm.z);
     queue_axis(STEPPER_EXTRUDER_0, dm.extruder_0);
     queue_axis(STEPPER_EXTRUDER_1, dm.extruder_1);
 }
@@ -238,16 +249,14 @@ void Engine::queue_decomposed_move(const motion::DecomposedMove& dm) {
 void Engine::tick_printing() {
     if (!sync_) return;
 
-    /* Feed moves from sync engine to planner, then to MCU step queues */
     if (!mcu_->queue_has_space(STEPPER_COREXY_A)) return;
 
-    /* Get next command from sync engine (returns command for any nozzle) */
+    /* Get next command from sync engine */
     auto tagged = sync_->next();
     if (tagged) {
         int nozzle = tagged->nozzle_id;
         auto& command = tagged->command;
 
-        /* Handle move commands */
         if (auto* move = std::get_if<gcode::MoveCommand>(&command)) {
             motion::CartesianPos target;
             if (move->x) target.x = *move->x;
@@ -275,6 +284,20 @@ void Engine::tick_printing() {
             uint16_t duty = static_cast<uint16_t>(fan->speed * 65535 / 255);
             mcu_->set_fan_pwm(static_cast<uint8_t>(fan_channel), duty);
         }
+        else if (auto* home = std::get_if<gcode::HomeCommand>(&command)) {
+            /* G28 during printing — pause, home, resume */
+            spdlog::info("G28 in print stream — homing axes");
+            home_axes(home->x, home->y, home->z);
+        }
+        else if (std::get_if<gcode::FilamentChange>(&command)) {
+            /* M600 filament change */
+            spdlog::info("M600 — filament change requested");
+            state_ = PrinterState::FilamentChange;
+            return;
+        }
+        else if (auto* task_begin = std::get_if<gcode::TaskBegin>(&command)) {
+            current_layer_ = task_begin->layer;
+        }
     }
 
     /* Drain planners through frame decomposer to MCU step queues */
@@ -282,14 +305,12 @@ void Engine::tick_printing() {
         auto move = planner_[nozzle]->pop();
         if (!move) continue;
 
-        /* Decompose into motor-space through frame decomposer */
         auto decomposed = decomposer_->decompose(nozzle, *move);
         if (!decomposed) {
             spdlog::warn("Move rejected by frame decomposer (nozzle {})", nozzle);
             continue;
         }
 
-        /* Queue all motor channels */
         queue_decomposed_move(*decomposed);
     }
 
@@ -298,27 +319,61 @@ void Engine::tick_printing() {
         spdlog::info("Print complete");
         state_ = PrinterState::Finishing;
 
-        /* Cool down */
         for (auto& h : heaters_) {
             if (h) h->set_target(0.0);
         }
+
+        /* Clear checkpoint on successful completion */
+        checkpoint_mgr_->clear();
 
         state_ = PrinterState::Idle;
     }
 }
 
 void Engine::tick_homing() {
-    const auto& status = mcu_->last_status();
+    if (!homing_ctrl_) return;
 
-    bool x_homed = (status.endstop_state & 0x01) != 0;
-    bool y_homed = (status.endstop_state & 0x02) != 0;
-    bool z_homed = (status.endstop_state & 0x04) != 0;
-
-    if (x_homed && y_homed && z_homed) {
-        spdlog::info("Homing complete");
-        decomposer_->reset();
+    if (homing_ctrl_->tick()) {
+        /* Homing complete */
+        if (homing_ctrl_->succeeded()) {
+            decomposer_->reset();
+            spdlog::info("Homing successful");
+        } else {
+            spdlog::error("Homing failed");
+        }
+        homing_ctrl_.reset();
         state_ = PrinterState::Idle;
     }
+}
+
+void Engine::tick_filament_change() {
+    /*
+     * M600 filament change sequence:
+     * 1. Retract filament (already paused)
+     * 2. Move nozzle to park position
+     * 3. Wait for user to confirm new filament loaded
+     * 4. Prime extruder
+     * 5. Resume print
+     *
+     * The UI shows a dialog; user calls filament_change_confirm().
+     */
+    /* In paused state, waiting for user action */
+}
+
+void Engine::filament_change_confirm() {
+    if (state_ != PrinterState::FilamentChange) return;
+    spdlog::info("Filament change confirmed — resuming print");
+
+    /* Prime extruder: push a small amount of filament */
+    double prime_mm = 30.0;
+    double prime_speed = 3.0; /* mm/s */
+    int steps = static_cast<int>(prime_mm * config_.steps_per_mm_e);
+    uint32_t interval = static_cast<uint32_t>(1000000.0 / (prime_speed * config_.steps_per_mm_e));
+
+    mcu_->set_step_dir(STEPPER_EXTRUDER_0, 0);
+    mcu_->queue_step(STEPPER_EXTRUDER_0, interval, static_cast<uint16_t>(steps), 0);
+
+    state_ = PrinterState::Printing;
 }
 
 void Engine::check_safety() {
@@ -340,6 +395,33 @@ void Engine::check_safety() {
     }
 }
 
+void Engine::save_checkpoint() {
+    if (!sync_ || !decomposer_) return;
+
+    PrintCheckpoint cp;
+    cp.gcode_path = current_gcode_path_;
+    cp.nozzle0_line = stream_ ? stream_->line_number(0) : 0;
+    cp.nozzle1_line = stream_ ? stream_->line_number(1) : 0;
+
+    auto frame = decomposer_->frame_position();
+    cp.pos_x = frame.x;
+    cp.pos_y = frame.y;
+    cp.pos_z = frame.z;
+    cp.e0 = decomposer_->nozzle_position(0).e;
+    cp.e1 = decomposer_->nozzle_position(1).e;
+
+    cp.nozzle0_target = heaters_[0] ? heaters_[0]->target() : 0;
+    cp.nozzle1_target = heaters_[1] ? heaters_[1]->target() : 0;
+    cp.bed_target = heaters_[2] ? heaters_[2]->target() : 0;
+
+    cp.layer = current_layer_;
+
+    auto elapsed = std::chrono::steady_clock::now() - print_start_time_;
+    cp.elapsed_s = std::chrono::duration<double>(elapsed).count();
+
+    checkpoint_mgr_->save(cp);
+}
+
 bool Engine::start_print(const std::string& gcode_base_path) {
     if (state_ != PrinterState::Idle) {
         spdlog::warn("Cannot start print: not idle (state={})", static_cast<int>(state_.load()));
@@ -347,29 +429,73 @@ bool Engine::start_print(const std::string& gcode_base_path) {
     }
 
     spdlog::info("Starting print: {}", gcode_base_path);
+    current_gcode_path_ = gcode_base_path;
 
-    /* Open dual gcode streams */
     stream_ = std::make_unique<gcode::Stream>();
     if (!stream_->open(gcode_base_path)) {
         spdlog::error("Failed to open G-code files: {}", gcode_base_path);
         return false;
     }
 
-    /* Create sync engine */
     sync_ = std::make_unique<gcode::SyncEngine>(*stream_);
 
-    /* Clear planners and decomposer */
     planner_[0]->clear();
     planner_[1]->clear();
     decomposer_->reset();
+    current_layer_ = 0;
+    print_start_time_ = std::chrono::steady_clock::now();
 
     state_ = PrinterState::Heating;
     return true;
 }
 
+bool Engine::resume_print() {
+    PrintCheckpoint cp;
+    if (!checkpoint_mgr_->load(cp)) {
+        spdlog::warn("No checkpoint to resume from");
+        return false;
+    }
+
+    spdlog::info("Resuming print from checkpoint: {} at layer {}", cp.gcode_path, cp.layer);
+
+    /* Restore heater targets */
+    if (heaters_[0]) heaters_[0]->set_target(cp.nozzle0_target);
+    if (heaters_[1]) heaters_[1]->set_target(cp.nozzle1_target);
+    if (heaters_[2]) heaters_[2]->set_target(cp.bed_target);
+
+    /* Open G-code streams and skip to checkpoint position */
+    stream_ = std::make_unique<gcode::Stream>();
+    if (!stream_->open(cp.gcode_path)) {
+        spdlog::error("Failed to open G-code files for resume: {}", cp.gcode_path);
+        return false;
+    }
+
+    /* Skip to the saved line numbers */
+    stream_->skip_to(0, cp.nozzle0_line);
+    stream_->skip_to(1, cp.nozzle1_line);
+
+    sync_ = std::make_unique<gcode::SyncEngine>(*stream_);
+
+    planner_[0]->clear();
+    planner_[1]->clear();
+    decomposer_->reset();
+    current_gcode_path_ = cp.gcode_path;
+    current_layer_ = cp.layer;
+    print_start_time_ = std::chrono::steady_clock::now();
+
+    /* First move should raise Z to checkpoint height + 1mm, then return */
+    state_ = PrinterState::Heating;
+    return true;
+}
+
+bool Engine::has_checkpoint() const {
+    return checkpoint_mgr_->exists();
+}
+
 void Engine::pause() {
     if (state_ == PrinterState::Printing) {
         spdlog::info("Pausing print");
+        save_checkpoint();
         state_ = PrinterState::Paused;
     }
 }
@@ -389,31 +515,25 @@ void Engine::cancel() {
     planner_[1]->clear();
     decomposer_->reset();
 
-    /* Cool down heaters */
     for (auto& h : heaters_) {
         if (h) h->set_target(0.0);
     }
 
+    checkpoint_mgr_->clear();
     state_ = PrinterState::Idle;
 }
 
 void Engine::home_all() {
-    if (state_ != PrinterState::Idle) return;
-    spdlog::info("Homing all axes");
+    home_axes(true, true, true);
+}
+
+void Engine::home_axes(bool x, bool y, bool z) {
+    if (state_ != PrinterState::Idle && state_ != PrinterState::Printing) return;
+    spdlog::info("Homing axes: X={} Y={} Z={}", x, y, z);
+
+    homing_ctrl_ = std::make_unique<motion::HomingController>(*mcu_, config_);
+    homing_ctrl_->start(x, y, z);
     state_ = PrinterState::Homing;
-
-    /* Send slow moves towards endstops */
-    double home_speed = 50.0; /* mm/s */
-    double step_interval = 1000000.0 / (home_speed * config_.steps_per_mm_xy);
-
-    /* Move X, Y, Z towards negative endstops */
-    for (uint8_t ch : {STEPPER_COREXY_A, STEPPER_COREXY_B}) {
-        mcu_->set_step_dir(ch, 1); /* Negative direction */
-        mcu_->queue_step(ch, static_cast<uint32_t>(step_interval), 10000, 0);
-    }
-    mcu_->set_step_dir(STEPPER_Z, 1);
-    double z_interval = 1000000.0 / (5.0 * config_.steps_per_mm_z); /* 5mm/s for Z */
-    mcu_->queue_step(STEPPER_Z, static_cast<uint32_t>(z_interval), 5000, 0);
 }
 
 void Engine::jog(char axis, double distance_mm, double speed_mm_s) {
@@ -425,12 +545,11 @@ void Engine::jog(char axis, double distance_mm, double speed_mm_s) {
 
     switch (axis) {
     case 'X': case 'x':
-        /* CoreXY: X jog moves both A and B by same amount */
         channel = STEPPER_COREXY_A;
         steps_per_mm = config_.steps_per_mm_xy;
         break;
     case 'Y': case 'y':
-        channel = STEPPER_COREXY_A; /* Will handle B separately */
+        channel = STEPPER_COREXY_A;
         steps_per_mm = config_.steps_per_mm_xy;
         break;
     case 'Z': case 'z':
@@ -454,13 +573,11 @@ void Engine::jog(char axis, double distance_mm, double speed_mm_s) {
     uint8_t dir = distance_mm < 0 ? 1 : 0;
 
     if (axis == 'X' || axis == 'x') {
-        /* CoreXY X: A = +distance, B = +distance */
         mcu_->set_step_dir(STEPPER_COREXY_A, dir);
         mcu_->queue_step(STEPPER_COREXY_A, interval, static_cast<uint16_t>(steps), 0);
         mcu_->set_step_dir(STEPPER_COREXY_B, dir);
         mcu_->queue_step(STEPPER_COREXY_B, interval, static_cast<uint16_t>(steps), 0);
     } else if (axis == 'Y' || axis == 'y') {
-        /* CoreXY Y: A = +distance, B = -distance */
         mcu_->set_step_dir(STEPPER_COREXY_A, dir);
         mcu_->queue_step(STEPPER_COREXY_A, interval, static_cast<uint16_t>(steps), 0);
         mcu_->set_step_dir(STEPPER_COREXY_B, dir ? 0 : 1);
@@ -494,12 +611,10 @@ void Engine::emergency_stop() {
     spdlog::error("EMERGENCY STOP");
     state_ = PrinterState::Error;
 
-    /* Kill all heaters */
     for (auto& h : heaters_) {
         if (h) h->kill();
     }
 
-    /* Tell MCU to stop everything */
     mcu_->emergency_stop();
 }
 

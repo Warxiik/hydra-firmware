@@ -23,6 +23,9 @@ public:
     /* Current line number for error reporting */
     int line_number(int nozzle_id) const;
 
+    /* Skip to a specific line number (for resume from checkpoint) */
+    void skip_to(int nozzle_id, int target_line);
+
     /* Has this stream reached EOF? */
     bool eof(int nozzle_id) const;
 

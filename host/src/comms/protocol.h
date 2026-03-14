@@ -30,6 +30,14 @@ public:
     /* PWM */
     bool set_pwm(uint8_t channel, uint16_t duty);
 
+    /* Endstop / Homing */
+    bool endstop_home(uint8_t channel, uint8_t endstop_bit);
+    struct EndstopQueryResult {
+        uint8_t endstop_state;
+        uint8_t trigger_flags; /* Bit N = channel N homing triggered */
+    };
+    std::optional<EndstopQueryResult> endstop_query();
+
     /* TMC2209 */
     bool tmc_write(uint8_t driver, uint8_t reg, uint32_t value);
     std::optional<uint32_t> tmc_read(uint8_t driver, uint8_t reg);

@@ -54,6 +54,14 @@ public:
     bool emergency_stop();
     bool heartbeat();
 
+    /* Endstop / Homing */
+    bool endstop_home(uint8_t channel, uint8_t endstop_bit);
+    struct EndstopQuery {
+        uint8_t endstop_state;
+        uint8_t trigger_flags;
+    };
+    std::optional<EndstopQuery> endstop_query();
+
     /* TMC2209 */
     bool tmc_write(uint8_t driver, uint8_t reg, uint32_t value);
     std::optional<uint32_t> tmc_read(uint8_t driver, uint8_t reg);

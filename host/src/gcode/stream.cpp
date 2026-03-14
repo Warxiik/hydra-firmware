@@ -47,6 +47,21 @@ std::optional<Command> Stream::next(int nozzle_id) {
     return std::nullopt;
 }
 
+void Stream::skip_to(int nozzle_id, int target_line) {
+    if (nozzle_id < 0 || nozzle_id >= nozzle_count_) return;
+
+    auto& s = streams_[nozzle_id];
+    if (s.at_eof) return;
+
+    /* Fast-forward by reading and discarding lines */
+    std::string line;
+    while (s.line_num < target_line && std::getline(s.file, line)) {
+        s.line_num++;
+    }
+
+    spdlog::info("Stream [nozzle {}] skipped to line {}", nozzle_id, s.line_num);
+}
+
 int Stream::line_number(int nozzle_id) const {
     if (nozzle_id < 0 || nozzle_id >= nozzle_count_) return 0;
     return streams_[nozzle_id].line_num;

@@ -67,11 +67,24 @@ public:
     CartesianPos frame_position() const { return frame_pos_; }
 
     /**
+     * Combined frame acceleration budget usage (0.0 - 1.0).
+     * When both nozzles move, frame accel is shared.
+     */
+    double frame_accel_usage() const { return last_frame_accel_usage_; }
+
+    /**
      * Reset all tracked positions to zero.
      */
     void reset();
 
 private:
+    /**
+     * Clamp move speed to respect shared frame acceleration budget.
+     * When nozzle 0 moves the frame, the available frame acceleration
+     * must be shared with any simultaneous offset moves.
+     */
+    void apply_accel_budget(DecomposedMove& dm, double move_duration);
+
     const Config& config_;
     CollisionValidator collision_;
 
@@ -80,6 +93,7 @@ private:
     CartesianPos frame_pos_;      /* Frame (= nozzle 0) position */
     double offset_x_ = 0;        /* Current offset actuator X */
     double offset_y_ = 0;        /* Current offset actuator Y */
+    double last_frame_accel_usage_ = 0;
 };
 
 } // namespace hydra::motion

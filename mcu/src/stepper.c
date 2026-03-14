@@ -21,6 +21,10 @@ typedef struct {
 
 static step_state_t step_states[STEPPER_COUNT];
 
+/* Per-channel homing state */
+static uint8_t homing_endstop_bit[STEPPER_COUNT]; /* 0 = not homing */
+static volatile bool homing_triggered[STEPPER_COUNT];
+
 void stepper_init(void) {
     for (int i = 0; i < STEPPER_COUNT; i++) {
         channels[i].head = 0;
@@ -108,8 +112,23 @@ void stepper_core1_loop(void) {
     bool any_step = false;
     bool step_bits[STEPPER_COUNT] = {false};
 
+    /* Read endstop state once per loop iteration */
+    uint8_t endstops = hydra_gpio_read_endstops();
+
     for (int ch = 0; ch < STEPPER_COUNT; ch++) {
         step_state_t *st = &step_states[ch];
+
+        /* Check endstop during homing — halt channel if triggered */
+        if (homing_endstop_bit[ch] && (endstops & homing_endstop_bit[ch])) {
+            if (st->active) {
+                st->active = false;
+                st->steps_remaining = 0;
+            }
+            /* Flush remaining queue entries */
+            channels[ch].tail = channels[ch].head;
+            homing_triggered[ch] = true;
+            continue;
+        }
 
         /* Load next segment if idle */
         if (!st->active) {
@@ -218,4 +237,26 @@ void stepper_emergency_stop(void) {
 
 void stepper_enable(bool enable) {
     gpio_put(PIN_STEPPER_EN, enable ? 0 : 1);
+}
+
+void stepper_set_homing(uint8_t channel, uint8_t endstop_bit) {
+    if (channel >= STEPPER_COUNT) return;
+    homing_endstop_bit[channel] = endstop_bit;
+    homing_triggered[channel] = false;
+}
+
+bool stepper_homing_triggered(uint8_t channel) {
+    if (channel >= STEPPER_COUNT) return false;
+    bool triggered = homing_triggered[channel];
+    if (triggered) {
+        homing_triggered[channel] = false;
+    }
+    return triggered;
+}
+
+void stepper_flush_channel(uint8_t channel) {
+    if (channel >= STEPPER_COUNT) return;
+    channels[channel].head = 0;
+    channels[channel].tail = 0;
+    step_states[channel].active = false;
 }

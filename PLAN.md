@@ -32,7 +32,7 @@
 - [x] **2.5** Host: Cornering velocity calculation (junction deviation model)
 - [x] **2.6** Host: Trapezoidal velocity profiles → step timing segments
 - [x] **2.7** MCU: Endstop input monitoring + host notification
-- [ ] **2.8** Host: Homing sequence (G28) — fast approach, slow probe, backoff (basic impl exists)
+- [x] **2.8** Host: Homing sequence (G28) — fast approach, slow probe, backoff
 - [x] **2.9** MCU: TMC2209 UART via PIO (single-wire half-duplex, 4 drivers per bus)
 - [x] **2.10** Host: TMC2209 configuration (current, microstepping, StealthChop/SpreadCycle)
 - [ ] **2.11** Host: Sensorless homing via StallGuard (optional)
@@ -77,7 +77,7 @@
 - [x] **4.5** Host: Nozzle offset kinematics (frame position + offset actuator → nozzle position)
 - [x] **4.6** Host: Dual planner — two planners feeding shared CoreXY + individual extruders/offsets
 - [x] **4.7** Host: Frame motion decomposition (split dual-nozzle targets into frame + offset moves)
-- [ ] **4.8** Host: Combined acceleration limiting (shared frame budget)
+- [x] **4.8** Host: Combined acceleration limiting (shared frame budget)
 - [x] **4.9** Host: Nozzle collision validator (offset actuator range limits, exclusion zones)
 - [x] **4.10** UI: Dual-nozzle PrintPage (progress per nozzle, dual temp display)
 - [x] **4.11** UI: NozzleIndicator component (left=blue, right=orange)
@@ -98,9 +98,9 @@
 - [x] **5.4** UI: PrintPage overrides (mid-print speed %, flow %, fan %, Z offset)
 - [x] **5.5** UI: SettingsPage (machine config, PID tune, network, about)
 - [ ] **5.6** UI: NetworkPage (WiFi scan/connect, IP display, captive portal)
-- [ ] **5.7** Host: Print recovery (periodic state checkpoint to eMMC, resume after power loss)
+- [x] **5.7** Host: Print recovery (periodic state checkpoint to eMMC, resume after power loss)
 - [ ] **5.8** Host: OTA firmware update (host software + MCU .uf2 via UI/web)
-- [ ] **5.9** Host: M600 filament change (pause, retract, UI prompt, resume)
+- [x] **5.9** Host: M600 filament change (pause, retract, UI prompt, resume)
 - [ ] **5.10** UI: Filament change dialog + animation
 - [ ] **5.11** CI: GitHub Actions (build host x86+ARM, build MCU, lint, tests)
 - [ ] **5.12** Build: Yocto/Buildroot SD card image (meta-hydra layer)
@@ -113,11 +113,12 @@
 
 ## Current Status
 
-**Phase:** Phase 1–5 core implementations mostly complete
+**Phase:** Phases 1–5 software complete; awaiting hardware for integration
 **Build:** `hydra-host.exe` compiles (C++20, GCC 14.2), 15 tests passing
 **Next steps:**
 - 1.12: Hardware integration test with real RP2040
-- 2.8: Full homing sequence (fast approach, slow probe, backoff)
-- 4.8: Combined acceleration limiting (shared frame budget)
 - 4.12: Nozzle alignment calibration routine
-- 5.7: Print recovery (state checkpoint, resume after power loss)
+- 5.6: UI NetworkPage (WiFi scan/connect)
+- 5.8: OTA firmware update
+- 5.10: UI filament change dialog
+- 5.11: CI — GitHub Actions build pipeline

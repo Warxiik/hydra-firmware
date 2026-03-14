@@ -102,6 +102,20 @@ bool Protocol::set_pwm(uint8_t channel, uint16_t duty) {
     return true;
 }
 
+bool Protocol::endstop_home(uint8_t channel, uint8_t endstop_bit) {
+    uint8_t buf[3] = {CMD_ENDSTOP_HOME, channel, endstop_bit};
+    auto rsp = command(buf, 3);
+    return rsp && !rsp->empty() && (*rsp)[0] == RSP_ACK;
+}
+
+std::optional<Protocol::EndstopQueryResult> Protocol::endstop_query() {
+    uint8_t cmd = CMD_ENDSTOP_QUERY;
+    auto rsp = command(&cmd, 1);
+    if (!rsp || rsp->size() < 3 || (*rsp)[0] != RSP_ENDSTOP_STATE)
+        return std::nullopt;
+    return EndstopQueryResult{(*rsp)[1], (*rsp)[2]};
+}
+
 bool Protocol::tmc_write(uint8_t driver, uint8_t reg, uint32_t value) {
     uint8_t buf[7];
     buf[0] = CMD_TMC_WRITE;

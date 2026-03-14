@@ -52,4 +52,25 @@ void stepper_emergency_stop(void);
 /* Enable/disable all stepper drivers */
 void stepper_enable(bool enable);
 
+/**
+ * Endstop-triggered homing support.
+ * When a channel is in homing mode, the step scheduler monitors the
+ * specified endstop bit and halts the channel when triggered.
+ *
+ * @param channel     Stepper channel (0-6)
+ * @param endstop_bit Endstop bitmask to monitor (0 = disable homing mode)
+ */
+void stepper_set_homing(uint8_t channel, uint8_t endstop_bit);
+
+/**
+ * Check if a channel's homing sequence triggered (endstop hit).
+ * Clears the flag after reading.
+ */
+bool stepper_homing_triggered(uint8_t channel);
+
+/**
+ * Flush the step queue for a single channel.
+ */
+void stepper_flush_channel(uint8_t channel);
+
 #endif /* HYDRA_MCU_STEPPER_H */

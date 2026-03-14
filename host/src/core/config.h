@@ -40,6 +40,18 @@ struct Config {
     PID nozzle_pid;
     PID bed_pid{10.0, 0.5, 200.0};
 
+    /* Homing */
+    struct Homing {
+        double fast_speed_xy = 50.0;    /* mm/s — fast approach */
+        double slow_speed_xy = 5.0;     /* mm/s — slow probe */
+        double fast_speed_z = 10.0;
+        double slow_speed_z = 2.0;
+        double backoff_mm = 5.0;        /* Distance to back off after endstop hit */
+        double max_travel_xy = 250.0;   /* Max distance to travel before giving up */
+        double max_travel_z = 260.0;
+    };
+    Homing homing;
+
     /* TMC2209 stepper driver settings */
     struct TMC {
         uint16_t xy_run_current_ma = 800;

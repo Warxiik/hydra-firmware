@@ -1,6 +1,7 @@
 #include "protocol.h"
 #include "transport.h"
 #include "stepper.h"
+#include "tmc_uart.h"
 #include "adc.h"
 #include "gpio.h"
 #include "watchdog.h"
@@ -84,6 +85,84 @@ static void handle_command(const uint8_t *data, uint16_t len) {
         }
         break;
     }
+
+    case CMD_ENDSTOP_HOME:
+        /*
+         * Configure endstop monitoring for homing.
+         * Payload: [channel] [endstop_bit_mask]
+         *   endstop_bit_mask = 0 → disable homing mode
+         *   endstop_bit_mask = 1 → monitor X endstop
+         *   endstop_bit_mask = 2 → monitor Y endstop
+         *   endstop_bit_mask = 4 → monitor Z endstop
+         */
+        if (len >= 3) {
+            stepper_set_homing(data[1], data[2]);
+            rsp_buf[0] = RSP_ACK;
+            transport_send(rsp_buf, 1);
+        }
+        break;
+
+    case CMD_ENDSTOP_QUERY: {
+        /*
+         * Query endstop state + homing trigger flags.
+         * Response: [RSP_ENDSTOP_STATE] [endstop_state] [trigger_flags]
+         *   trigger_flags: bit N = 1 if channel N's homing was triggered
+         */
+        uint8_t endstops = hydra_gpio_read_endstops();
+        uint8_t triggers = 0;
+        for (int i = 0; i < STEPPER_COUNT; i++) {
+            if (stepper_homing_triggered(i)) {
+                triggers |= (1 << i);
+            }
+        }
+        rsp_buf[0] = RSP_ENDSTOP_STATE;
+        rsp_buf[1] = endstops;
+        rsp_buf[2] = triggers;
+        transport_send(rsp_buf, 3);
+        break;
+    }
+
+    case CMD_RESET_STEP_CLOCK:
+        if (len >= 6) {
+            uint32_t clock = data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24);
+            stepper_reset_clock(data[1], clock);
+        }
+        break;
+
+    case CMD_TMC_WRITE:
+        if (len >= 7) {
+            uint32_t value = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);
+            uint8_t driver = data[1];
+            uint8_t bus = (driver <= 3) ? 0 : 1;
+            uint8_t addr = (driver <= 3) ? driver : (driver - 4);
+            bool ok = tmc_uart_write_reg(bus, addr, data[2], value);
+            rsp_buf[0] = ok ? RSP_ACK : RSP_ERROR;
+            if (!ok) rsp_buf[1] = ERR_TMC_COMM;
+            transport_send(rsp_buf, ok ? 1 : 2);
+        }
+        break;
+
+    case CMD_TMC_READ:
+        if (len >= 3) {
+            uint8_t driver = data[1];
+            uint8_t bus = (driver <= 3) ? 0 : 1;
+            uint8_t addr = (driver <= 3) ? driver : (driver - 4);
+            uint32_t value = 0;
+            bool ok = tmc_uart_read_reg(bus, addr, data[2], &value);
+            if (ok) {
+                rsp_buf[0] = RSP_TMC_READ;
+                rsp_buf[1] = value & 0xFF;
+                rsp_buf[2] = (value >> 8) & 0xFF;
+                rsp_buf[3] = (value >> 16) & 0xFF;
+                rsp_buf[4] = (value >> 24) & 0xFF;
+                transport_send(rsp_buf, 5);
+            } else {
+                rsp_buf[0] = RSP_ERROR;
+                rsp_buf[1] = ERR_TMC_COMM;
+                transport_send(rsp_buf, 2);
+            }
+        }
+        break;
 
     default:
         rsp_buf[0] = RSP_ERROR;

@@ -26,9 +26,10 @@ std::string WebServer::state_to_string(PrinterState state) const {
     case PrinterState::Heating:   return "heating";
     case PrinterState::Printing:  return "printing";
     case PrinterState::Paused:    return "paused";
-    case PrinterState::Finishing: return "finishing";
-    case PrinterState::Error:     return "error";
-    default:                      return "unknown";
+    case PrinterState::Finishing:      return "finishing";
+    case PrinterState::FilamentChange: return "filament_change";
+    case PrinterState::Error:          return "error";
+    default:                           return "unknown";
     }
 }
 
@@ -97,6 +98,26 @@ void WebServer::server_thread() {
 
     CROW_ROUTE(app, "/api/print/cancel").methods(crow::HTTPMethod::POST)(
         [this]() { engine_.cancel(); return crow::response(R"({"ok":true})"); });
+
+    CROW_ROUTE(app, "/api/print/resume_checkpoint").methods(crow::HTTPMethod::POST)(
+        [this]() {
+            bool ok = engine_.resume_print();
+            return crow::response(ok ? 200 : 404,
+                ok ? R"({"ok":true})" : R"({"error":"no checkpoint"})");
+        });
+
+    CROW_ROUTE(app, "/api/print/has_checkpoint").methods(crow::HTTPMethod::GET)(
+        [this]() {
+            json j;
+            j["hasCheckpoint"] = engine_.has_checkpoint();
+            return crow::response(j.dump());
+        });
+
+    CROW_ROUTE(app, "/api/filament_change/confirm").methods(crow::HTTPMethod::POST)(
+        [this]() {
+            engine_.filament_change_confirm();
+            return crow::response(R"({"ok":true})");
+        });
 
     CROW_ROUTE(app, "/api/home").methods(crow::HTTPMethod::POST)(
         [this]() { engine_.home_all(); return crow::response(R"({"ok":true})"); });

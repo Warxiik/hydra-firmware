@@ -105,6 +105,18 @@ bool McuProxy::heartbeat() {
     return protocol_->send_nop();
 }
 
+bool McuProxy::endstop_home(uint8_t channel, uint8_t endstop_bit) {
+    if (!protocol_) return false;
+    return protocol_->endstop_home(channel, endstop_bit);
+}
+
+std::optional<McuProxy::EndstopQuery> McuProxy::endstop_query() {
+    if (!protocol_) return std::nullopt;
+    auto result = protocol_->endstop_query();
+    if (!result) return std::nullopt;
+    return EndstopQuery{result->endstop_state, result->trigger_flags};
+}
+
 bool McuProxy::tmc_write(uint8_t driver, uint8_t reg, uint32_t value) {
     if (!protocol_) return false;
     return protocol_->tmc_write(driver, reg, value);

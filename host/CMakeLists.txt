@@ -79,8 +79,10 @@ add_executable(hydra-host
     src/motion/step_compress.cpp
     src/motion/collision.cpp
     src/motion/frame_decompose.cpp
+    src/motion/homing.cpp
     src/drivers/tmc_config.cpp
     src/files/file_manager.cpp
+    src/core/checkpoint.cpp
     src/thermal/pid.cpp
     src/thermal/heater.cpp
     src/thermal/thermistor.cpp

@@ -126,6 +126,9 @@ std::optional<DecomposedMove> FrameDecomposer::decompose(int nozzle, const Plann
         result.extruder_1 = compute_axis(de, config_.steps_per_mm_e);
     }
 
+    /* Apply combined acceleration budget */
+    apply_accel_budget(result, duration);
+
     /* Update tracked state */
     nozzle_pos_[nozzle] = new_nozzle;
     frame_pos_ = new_frame;
@@ -133,6 +136,62 @@ std::optional<DecomposedMove> FrameDecomposer::decompose(int nozzle, const Plann
     offset_y_ = new_offset_y;
 
     return result;
+}
+
+void FrameDecomposer::apply_accel_budget(DecomposedMove& dm, double move_duration) {
+    if (move_duration <= 0) {
+        last_frame_accel_usage_ = 0;
+        return;
+    }
+
+    /*
+     * Combined acceleration limiting:
+     *
+     * The CoreXY frame and offset actuators share the same physical
+     * structure. When both are accelerating simultaneously, the total
+     * force budget is limited by the motor/belt capabilities.
+     *
+     * We compute the combined acceleration magnitude and scale speeds
+     * down if it exceeds the configured max_acceleration.
+     *
+     * Frame accel ≈ frame_speed / duration (simplified)
+     * Offset accel ≈ offset_speed / duration
+     * Combined = sqrt(frame² + offset²)
+     */
+    double frame_speed_a = (dm.corexy_a.speed_steps_s / config_.steps_per_mm_xy);
+    double frame_speed_b = (dm.corexy_b.speed_steps_s / config_.steps_per_mm_xy);
+    double frame_accel_a = frame_speed_a / move_duration;
+    double frame_accel_b = frame_speed_b / move_duration;
+
+    double offset_speed_x = (dm.offset_x.speed_steps_s / config_.steps_per_mm_offset);
+    double offset_speed_y = (dm.offset_y.speed_steps_s / config_.steps_per_mm_offset);
+    double offset_accel_x = offset_speed_x / move_duration;
+    double offset_accel_y = offset_speed_y / move_duration;
+
+    /* Combined acceleration magnitude */
+    double combined_accel = std::sqrt(
+        frame_accel_a * frame_accel_a +
+        frame_accel_b * frame_accel_b +
+        offset_accel_x * offset_accel_x +
+        offset_accel_y * offset_accel_y
+    );
+
+    double max_accel = config_.max_acceleration;
+    last_frame_accel_usage_ = combined_accel / max_accel;
+
+    if (combined_accel > max_accel && combined_accel > 0) {
+        /* Scale all speeds down proportionally */
+        double scale = max_accel / combined_accel;
+
+        dm.corexy_a.speed_steps_s *= scale;
+        dm.corexy_b.speed_steps_s *= scale;
+        dm.offset_x.speed_steps_s *= scale;
+        dm.offset_y.speed_steps_s *= scale;
+        dm.duration_s /= scale;
+
+        spdlog::debug("Frame accel budget: {:.0f}/{:.0f} mm/s² — scaled to {:.1f}%",
+                      combined_accel, max_accel, scale * 100);
+    }
 }
 
 } // namespace hydra::motion
