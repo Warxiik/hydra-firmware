@@ -8,6 +8,8 @@
 #include "../comms/mcu_proxy.h"
 #include <atomic>
 #include <string>
+#include <memory>
+#include <chrono>
 
 namespace hydra {
 
@@ -28,6 +30,7 @@ public:
 
     /* Main loop — blocks until shutdown */
     void run();
+    void shutdown();
 
     /* Print control */
     bool start_print(const std::string& gcode_base_path);
@@ -48,20 +51,32 @@ public:
     /* State queries */
     PrinterState state() const { return state_; }
     double progress() const;
+    double nozzle_temp(int nozzle) const;
+    double bed_temp() const;
 
 private:
-    void control_loop_tick();
+    void control_loop_tick(double dt_s);
+    void tick_thermal(double dt_s);
+    void tick_printing();
+    void tick_homing();
+    void check_safety();
 
     const Config& config_;
     std::atomic<PrinterState> state_{PrinterState::Idle};
     std::atomic<bool> running_{false};
 
-    /* Subsystems — constructed lazily or in constructor */
-    // std::unique_ptr<McuProxy> mcu_;
-    // std::unique_ptr<GcodeStream> stream_;
-    // std::unique_ptr<SyncEngine> sync_;
-    // std::unique_ptr<Planner> planner_[2];
-    // std::unique_ptr<HeaterManager> heaters_;
+    /* Subsystems */
+    std::unique_ptr<comms::McuProxy> mcu_;
+    std::unique_ptr<gcode::Stream> stream_;
+    std::unique_ptr<gcode::SyncEngine> sync_;
+    std::unique_ptr<motion::Planner> planner_[2];
+    std::unique_ptr<thermal::Heater> heaters_[3]; /* nozzle0, nozzle1, bed */
+
+    /* Timing */
+    std::chrono::steady_clock::time_point last_tick_;
+    uint32_t tick_count_ = 0;
+    uint32_t clock_sync_interval_ = 100; /* Every 100 ticks (~100ms) */
+    uint32_t status_poll_interval_ = 10; /* Every 10 ticks (~10ms) */
 };
 
 } // namespace hydra

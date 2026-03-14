@@ -5,11 +5,33 @@
 #include "hardware/spi.h"
 #include "hardware/gpio.h"
 
+/*
+ * Frame format (HYDRA_FRAME_OVERHEAD = 7):
+ *   [SYNC0][SYNC1][SEQ][LEN_LO][LEN_HI][PAYLOAD...][CRC_LO][CRC_HI]
+ *
+ * CRC-16 CCITT covers SEQ + LEN + PAYLOAD.
+ */
+
+typedef enum {
+    RX_SYNC0,
+    RX_SYNC1,
+    RX_HEADER,
+    RX_PAYLOAD,
+    RX_CRC,
+} rx_state_t;
+
 static uint8_t rx_buf[HYDRA_MAX_FRAME];
 static uint8_t tx_buf[HYDRA_MAX_FRAME];
-static uint16_t rx_pos;
+static uint8_t rx_payload[HYDRA_MAX_PAYLOAD];
+static uint16_t rx_payload_len;
+static volatile bool rx_ready;    /* A complete validated frame is available */
 
-/* CRC-16 CCITT lookup (generated at init or compile-time) */
+static rx_state_t rx_state;
+static uint16_t rx_pos;
+static uint16_t rx_expected_len;
+
+static uint8_t tx_seq;
+
 static uint16_t crc16_ccitt(const uint8_t *data, uint16_t len) {
     uint16_t crc = 0xFFFF;
     for (uint16_t i = 0; i < len; i++) {
@@ -25,7 +47,6 @@ static uint16_t crc16_ccitt(const uint8_t *data, uint16_t len) {
 }
 
 void transport_init(void) {
-    /* Configure SPI0 as slave */
     spi_init(SPI_INSTANCE, SPI_BAUDRATE);
     spi_set_slave(SPI_INSTANCE, true);
 
@@ -34,17 +55,81 @@ void transport_init(void) {
     gpio_set_function(PIN_SPI_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SPI_TX,  GPIO_FUNC_SPI);
 
+    rx_state = RX_SYNC0;
     rx_pos = 0;
+    rx_ready = false;
+    tx_seq = 0x10; /* Response sequences start at 0x10 */
 }
 
 void transport_poll(void) {
-    /* Read available bytes from SPI */
-    while (spi_is_readable(SPI_INSTANCE) && rx_pos < HYDRA_MAX_FRAME) {
-        spi_read_blocking(SPI_INSTANCE, 0x00, &rx_buf[rx_pos], 1);
-        rx_pos++;
-    }
+    /* Read all available bytes from SPI FIFO */
+    while (spi_is_readable(SPI_INSTANCE)) {
+        uint8_t byte;
+        spi_read_blocking(SPI_INSTANCE, 0x00, &byte, 1);
 
-    /* TODO: Detect frame boundaries using sync bytes and length field */
+        switch (rx_state) {
+        case RX_SYNC0:
+            if (byte == HYDRA_SYNC_BYTE_0) {
+                rx_buf[0] = byte;
+                rx_state = RX_SYNC1;
+            }
+            break;
+
+        case RX_SYNC1:
+            if (byte == HYDRA_SYNC_BYTE_1) {
+                rx_buf[1] = byte;
+                rx_pos = 2;
+                rx_state = RX_HEADER;
+            } else {
+                rx_state = RX_SYNC0; /* Bad sync — restart */
+            }
+            break;
+
+        case RX_HEADER:
+            rx_buf[rx_pos++] = byte;
+            if (rx_pos == 5) { /* SEQ + LEN_LO + LEN_HI received */
+                rx_expected_len = rx_buf[3] | ((uint16_t)rx_buf[4] << 8);
+                if (rx_expected_len > HYDRA_MAX_PAYLOAD) {
+                    rx_state = RX_SYNC0; /* Bad length — restart */
+                } else if (rx_expected_len == 0) {
+                    rx_state = RX_CRC; /* No payload, go straight to CRC */
+                } else {
+                    rx_state = RX_PAYLOAD;
+                }
+            }
+            break;
+
+        case RX_PAYLOAD:
+            rx_buf[rx_pos++] = byte;
+            if (rx_pos == 5 + rx_expected_len) {
+                rx_state = RX_CRC;
+            }
+            break;
+
+        case RX_CRC:
+            rx_buf[rx_pos++] = byte;
+            if (rx_pos == 5 + rx_expected_len + 2) {
+                /* Full frame received — validate CRC */
+                /* CRC covers bytes 2..end-2 (seq + len + payload) */
+                uint16_t data_len = 3 + rx_expected_len; /* seq(1) + len(2) + payload */
+                uint16_t computed = crc16_ccitt(&rx_buf[2], data_len);
+                uint16_t received = rx_buf[rx_pos - 2] | ((uint16_t)rx_buf[rx_pos - 1] << 8);
+
+                if (computed == received && !rx_ready) {
+                    /* Copy payload out */
+                    for (uint16_t i = 0; i < rx_expected_len; i++) {
+                        rx_payload[i] = rx_buf[5 + i];
+                    }
+                    rx_payload_len = rx_expected_len;
+                    rx_ready = true;
+                }
+                /* Either way, reset for next frame */
+                rx_state = RX_SYNC0;
+                rx_pos = 0;
+            }
+            break;
+        }
+    }
 }
 
 bool transport_send(const uint8_t *payload, uint16_t len) {
@@ -56,8 +141,8 @@ bool transport_send(const uint8_t *payload, uint16_t len) {
     tx_buf[pos++] = HYDRA_SYNC_BYTE_0;
     tx_buf[pos++] = HYDRA_SYNC_BYTE_1;
 
-    /* Sequence number (TODO: increment) */
-    tx_buf[pos++] = 0x10;
+    /* Sequence number */
+    tx_buf[pos++] = tx_seq++;
 
     /* Length (little-endian) */
     tx_buf[pos++] = len & 0xFF;
@@ -68,20 +153,25 @@ bool transport_send(const uint8_t *payload, uint16_t len) {
         tx_buf[pos++] = payload[i];
     }
 
-    /* CRC-16 over sequence + length + payload */
-    uint16_t crc = crc16_ccitt(&tx_buf[2], pos - 2);
+    /* CRC-16 over seq + len + payload */
+    uint16_t crc = crc16_ccitt(&tx_buf[2], 3 + len);
     tx_buf[pos++] = crc & 0xFF;
     tx_buf[pos++] = (crc >> 8) & 0xFF;
 
-    /* Write to SPI TX */
     spi_write_blocking(SPI_INSTANCE, tx_buf, pos);
-
     return true;
 }
 
 uint16_t transport_receive(uint8_t *buf, uint16_t buf_size) {
-    /* TODO: Parse framed messages from rx_buf, validate CRC, return payload */
-    (void)buf;
-    (void)buf_size;
-    return 0;
+    if (!rx_ready) return 0;
+
+    uint16_t len = rx_payload_len;
+    if (len > buf_size) len = buf_size;
+
+    for (uint16_t i = 0; i < len; i++) {
+        buf[i] = rx_payload[i];
+    }
+
+    rx_ready = false;
+    return len;
 }

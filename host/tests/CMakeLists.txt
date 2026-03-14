@@ -3,6 +3,9 @@ include(GoogleTest)
 add_executable(hydra-tests
     test_gcode_parser.cpp
     test_sync_engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/gcode/parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/gcode/stream.cpp
+    ${CMAKE_SOURCE_DIR}/src/gcode/sync_engine.cpp
 )
 
 target_include_directories(hydra-tests PRIVATE

@@ -1,5 +1,6 @@
 #include "core/engine.h"
 #include "core/config.h"
+#include "version.h"
 #include <spdlog/spdlog.h>
 #include <iostream>
 #include <csignal>
