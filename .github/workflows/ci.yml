@@ -70,6 +70,7 @@ jobs:
 
       - name: Configure
         run: |
+          cp /tmp/pico-sdk/external/pico_sdk_import.cmake mcu/pico_sdk_import.cmake
           cmake -B build/mcu -S mcu \
             -DPICO_SDK_PATH=/tmp/pico-sdk \
             -DCMAKE_BUILD_TYPE=Release
@@ -99,7 +100,7 @@ jobs:
           cache-dependency-path: ui/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Lint
         run: npm run lint --if-present
