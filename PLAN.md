@@ -59,7 +59,7 @@
 - [x] **3.12** UI: PrintPage (live temp chart, progress ring, override sliders)
 - [x] **3.13** UI: MovePage (manual XYZ jog, home buttons)
 - [x] **3.14** UI: PreparePage (preheat presets, home, load filament)
-- [ ] **3.15** Host: WebSocket bridge (live data from engine to React UI)
+- [x] **3.15** Host: WebSocket bridge (live data from engine to React UI)
 - [ ] **3.16** First single-nozzle print: calibration cube
 
 **Tests:** PID convergence simulation, thermal runaway detection, UI component tests
@@ -92,7 +92,7 @@
 
 **Goal:** Production-ready firmware image for Kickstarter fulfillment.
 
-- [ ] **5.1** Host: Web server (REST API + WebSocket for live data)
+- [x] **5.1** Host: Web server (REST API + WebSocket for live data)
 - [ ] **5.2** Host: File manager (SD card + WiFi upload, list/delete/rename)
 - [x] **5.3** UI: FilesPage (file browser, print preview, start print)
 - [x] **5.4** UI: PrintPage overrides (mid-print speed %, flow %, fan %, Z offset)
@@ -113,10 +113,10 @@
 
 ## Current Status
 
-**Phase:** Phase 1–4 core implementations complete
+**Phase:** Phase 1–4 core + web server complete
 **Build:** `hydra-host.exe` compiles (C++20, GCC 14.2), 15 tests passing
 **Next steps:**
 - 1.12: Hardware integration test with real RP2040
-- 3.15: WebSocket bridge connecting engine to React UI
-- 5.1: Web server (REST + WebSocket)
 - 2.10: TMC2209 driver configuration
+- 5.2: File manager (scan gcode directory, upload)
+- 4.7: Frame motion decomposition for dual-nozzle
