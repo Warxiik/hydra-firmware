@@ -110,6 +110,11 @@ bool McuProxy::tmc_write(uint8_t driver, uint8_t reg, uint32_t value) {
     return protocol_->tmc_write(driver, reg, value);
 }
 
+std::optional<uint32_t> McuProxy::tmc_read(uint8_t driver, uint8_t reg) {
+    if (!protocol_) return std::nullopt;
+    return protocol_->tmc_read(driver, reg);
+}
+
 bool McuProxy::queue_has_space(uint8_t channel, uint8_t min_free) const {
     if (channel >= STEPPER_COUNT) return false;
     return status_.queue_depth[channel] < (255 - min_free);

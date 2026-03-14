@@ -2,6 +2,7 @@
 
 #include <string>
 #include <optional>
+#include <cstdint>
 
 namespace hydra {
 
@@ -38,6 +39,21 @@ struct Config {
     };
     PID nozzle_pid;
     PID bed_pid{10.0, 0.5, 200.0};
+
+    /* TMC2209 stepper driver settings */
+    struct TMC {
+        uint16_t xy_run_current_ma = 800;
+        uint16_t xy_hold_current_ma = 400;
+        uint16_t z_run_current_ma = 800;
+        uint16_t z_hold_current_ma = 400;
+        uint16_t e_run_current_ma = 600;
+        uint16_t e_hold_current_ma = 300;
+        uint16_t offset_run_current_ma = 600;
+        uint16_t offset_hold_current_ma = 300;
+        uint8_t microsteps = 16;
+        bool stealthchop = true;
+    };
+    TMC tmc;
 
     /* File paths */
     std::string gcode_dir = "/home/hydra/gcodes";

@@ -4,8 +4,11 @@
 #include "../gcode/stream.h"
 #include "../gcode/sync_engine.h"
 #include "../motion/planner.h"
+#include "../motion/frame_decompose.h"
 #include "../thermal/heater.h"
 #include "../comms/mcu_proxy.h"
+#include "../drivers/tmc_config.h"
+#include "../files/file_manager.h"
 #include <atomic>
 #include <string>
 #include <memory>
@@ -54,12 +57,17 @@ public:
     double nozzle_temp(int nozzle) const;
     double bed_temp() const;
 
+    /* File manager access (for web server) */
+    files::FileManager& file_manager() { return *file_manager_; }
+
 private:
     void control_loop_tick(double dt_s);
     void tick_thermal(double dt_s);
     void tick_printing();
     void tick_homing();
     void check_safety();
+    void configure_drivers();
+    void queue_decomposed_move(const motion::DecomposedMove& dm);
 
     const Config& config_;
     std::atomic<PrinterState> state_{PrinterState::Idle};
@@ -70,7 +78,10 @@ private:
     std::unique_ptr<gcode::Stream> stream_;
     std::unique_ptr<gcode::SyncEngine> sync_;
     std::unique_ptr<motion::Planner> planner_[2];
+    std::unique_ptr<motion::FrameDecomposer> decomposer_;
     std::unique_ptr<thermal::Heater> heaters_[3]; /* nozzle0, nozzle1, bed */
+    std::unique_ptr<drivers::TmcConfig> tmc_config_;
+    std::unique_ptr<files::FileManager> file_manager_;
 
     /* Timing */
     std::chrono::steady_clock::time_point last_tick_;

@@ -34,7 +34,7 @@
 - [x] **2.7** MCU: Endstop input monitoring + host notification
 - [ ] **2.8** Host: Homing sequence (G28) — fast approach, slow probe, backoff (basic impl exists)
 - [x] **2.9** MCU: TMC2209 UART via PIO (single-wire half-duplex, 4 drivers per bus)
-- [ ] **2.10** Host: TMC2209 configuration (current, microstepping, StealthChop/SpreadCycle)
+- [x] **2.10** Host: TMC2209 configuration (current, microstepping, StealthChop/SpreadCycle)
 - [ ] **2.11** Host: Sensorless homing via StallGuard (optional)
 
 **Tests:** Kinematics transforms, planner velocity limits, homing repeatability
@@ -76,7 +76,7 @@
 - [x] **4.4** Host: Per-nozzle command queues (ring buffers, drained by engine)
 - [x] **4.5** Host: Nozzle offset kinematics (frame position + offset actuator → nozzle position)
 - [x] **4.6** Host: Dual planner — two planners feeding shared CoreXY + individual extruders/offsets
-- [ ] **4.7** Host: Frame motion decomposition (split dual-nozzle targets into frame + offset moves)
+- [x] **4.7** Host: Frame motion decomposition (split dual-nozzle targets into frame + offset moves)
 - [ ] **4.8** Host: Combined acceleration limiting (shared frame budget)
 - [x] **4.9** Host: Nozzle collision validator (offset actuator range limits, exclusion zones)
 - [x] **4.10** UI: Dual-nozzle PrintPage (progress per nozzle, dual temp display)
@@ -93,7 +93,7 @@
 **Goal:** Production-ready firmware image for Kickstarter fulfillment.
 
 - [x] **5.1** Host: Web server (REST API + WebSocket for live data)
-- [ ] **5.2** Host: File manager (SD card + WiFi upload, list/delete/rename)
+- [x] **5.2** Host: File manager (SD card + WiFi upload, list/delete/rename)
 - [x] **5.3** UI: FilesPage (file browser, print preview, start print)
 - [x] **5.4** UI: PrintPage overrides (mid-print speed %, flow %, fan %, Z offset)
 - [x] **5.5** UI: SettingsPage (machine config, PID tune, network, about)
@@ -113,10 +113,11 @@
 
 ## Current Status
 
-**Phase:** Phase 1–4 core + web server complete
+**Phase:** Phase 1–5 core implementations mostly complete
 **Build:** `hydra-host.exe` compiles (C++20, GCC 14.2), 15 tests passing
 **Next steps:**
 - 1.12: Hardware integration test with real RP2040
-- 2.10: TMC2209 driver configuration
-- 5.2: File manager (scan gcode directory, upload)
-- 4.7: Frame motion decomposition for dual-nozzle
+- 2.8: Full homing sequence (fast approach, slow probe, backoff)
+- 4.8: Combined acceleration limiting (shared frame budget)
+- 4.12: Nozzle alignment calibration routine
+- 5.7: Print recovery (state checkpoint, resume after power loss)

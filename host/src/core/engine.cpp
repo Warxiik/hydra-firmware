@@ -44,6 +44,15 @@ Engine::Engine(const Config& config) : config_(config) {
     planner_cfg.junction_deviation = config.junction_deviation;
     planner_[0] = std::make_unique<motion::Planner>(planner_cfg);
     planner_[1] = std::make_unique<motion::Planner>(planner_cfg);
+
+    /* Create frame decomposer */
+    decomposer_ = std::make_unique<motion::FrameDecomposer>(config);
+
+    /* Create TMC driver configurator */
+    tmc_config_ = std::make_unique<drivers::TmcConfig>(*mcu_);
+
+    /* Create file manager */
+    file_manager_ = std::make_unique<files::FileManager>(config.gcode_dir);
 }
 
 Engine::~Engine() {
@@ -54,6 +63,50 @@ void Engine::shutdown() {
     running_ = false;
 }
 
+void Engine::configure_drivers() {
+    spdlog::info("Configuring TMC2209 stepper drivers");
+
+    std::array<drivers::TmcDriverConfig, STEPPER_COUNT> configs;
+
+    /* CoreXY A,B (channels 0,1) */
+    for (int i = 0; i < 2; i++) {
+        configs[i].driver_id = static_cast<uint8_t>(i);
+        configs[i].run_current_ma = config_.tmc.xy_run_current_ma;
+        configs[i].hold_current_ma = config_.tmc.xy_hold_current_ma;
+        configs[i].microsteps = config_.tmc.microsteps;
+        configs[i].stealthchop = config_.tmc.stealthchop;
+    }
+
+    /* Offset X,Y (channels 2,3) */
+    for (int i = 2; i < 4; i++) {
+        configs[i].driver_id = static_cast<uint8_t>(i);
+        configs[i].run_current_ma = config_.tmc.offset_run_current_ma;
+        configs[i].hold_current_ma = config_.tmc.offset_hold_current_ma;
+        configs[i].microsteps = config_.tmc.microsteps;
+        configs[i].stealthchop = config_.tmc.stealthchop;
+    }
+
+    /* Z (channel 4) */
+    configs[4].driver_id = 4;
+    configs[4].run_current_ma = config_.tmc.z_run_current_ma;
+    configs[4].hold_current_ma = config_.tmc.z_hold_current_ma;
+    configs[4].microsteps = config_.tmc.microsteps;
+    configs[4].stealthchop = config_.tmc.stealthchop;
+
+    /* Extruders (channels 5,6) */
+    for (int i = 5; i < 7; i++) {
+        configs[i].driver_id = static_cast<uint8_t>(i);
+        configs[i].run_current_ma = config_.tmc.e_run_current_ma;
+        configs[i].hold_current_ma = config_.tmc.e_hold_current_ma;
+        configs[i].microsteps = config_.tmc.microsteps;
+        configs[i].stealthchop = config_.tmc.stealthchop;
+    }
+
+    if (!tmc_config_->configure_all(configs)) {
+        spdlog::warn("Some TMC drivers failed to configure — check wiring");
+    }
+}
+
 void Engine::run() {
     running_ = true;
     spdlog::info("Engine main loop started");
@@ -61,6 +114,9 @@ void Engine::run() {
     /* Connect to MCU */
     if (!mcu_->connect()) {
         spdlog::warn("MCU connection failed — running in offline mode");
+    } else {
+        /* Configure TMC2209 drivers after MCU connection */
+        configure_drivers();
     }
 
     last_tick_ = std::chrono::steady_clock::now();
@@ -153,6 +209,32 @@ void Engine::tick_thermal(double dt_s) {
     }
 }
 
+void Engine::queue_decomposed_move(const motion::DecomposedMove& dm) {
+    /* Helper: queue a single axis if it has steps to make */
+    auto queue_axis = [this](uint8_t channel, const motion::DecomposedMove::AxisMove& axis) {
+        int abs_steps = std::abs(axis.steps);
+        if (abs_steps == 0) return;
+
+        mcu_->set_step_dir(channel, axis.steps < 0 ? 1 : 0);
+
+        uint32_t interval = 10;
+        if (axis.speed_steps_s > 0) {
+            interval = static_cast<uint32_t>(1000000.0 / axis.speed_steps_s);
+            if (interval < 10) interval = 10;
+        }
+
+        mcu_->queue_step(channel, interval, static_cast<uint16_t>(abs_steps), 0);
+    };
+
+    queue_axis(STEPPER_COREXY_A,  dm.corexy_a);
+    queue_axis(STEPPER_COREXY_B,  dm.corexy_b);
+    queue_axis(STEPPER_OFFSET_X,  dm.offset_x);
+    queue_axis(STEPPER_OFFSET_Y,  dm.offset_y);
+    queue_axis(STEPPER_Z,         dm.z);
+    queue_axis(STEPPER_EXTRUDER_0, dm.extruder_0);
+    queue_axis(STEPPER_EXTRUDER_1, dm.extruder_1);
+}
+
 void Engine::tick_printing() {
     if (!sync_) return;
 
@@ -195,49 +277,20 @@ void Engine::tick_printing() {
         }
     }
 
-    /* Drain planners to MCU step queues */
+    /* Drain planners through frame decomposer to MCU step queues */
     for (int nozzle = 0; nozzle < 2; nozzle++) {
         auto move = planner_[nozzle]->pop();
         if (!move) continue;
 
-        /* Convert Cartesian move to CoreXY motor positions */
-        auto start_motors = motion::cartesian_to_corexy(move->start.x, move->start.y);
-        auto end_motors = motion::cartesian_to_corexy(move->end.x, move->end.y);
-
-        double a_steps = (end_motors.a - start_motors.a) * config_.steps_per_mm_xy;
-        double b_steps = (end_motors.b - start_motors.b) * config_.steps_per_mm_xy;
-        double z_steps = (move->end.z - move->start.z) * config_.steps_per_mm_z;
-        double e_steps = (move->end.e - move->start.e) * config_.steps_per_mm_e;
-
-        /* Queue step segments for each axis that needs to move */
-        struct AxisMove {
-            uint8_t channel;
-            double steps;
-            double steps_per_mm;
-        } axes[] = {
-            {STEPPER_COREXY_A, a_steps, config_.steps_per_mm_xy},
-            {STEPPER_COREXY_B, b_steps, config_.steps_per_mm_xy},
-            {STEPPER_Z,        z_steps, config_.steps_per_mm_z},
-            {static_cast<uint8_t>(STEPPER_EXTRUDER_0 + nozzle), e_steps, config_.steps_per_mm_e},
-        };
-
-        for (auto& axis : axes) {
-            int abs_steps = static_cast<int>(std::abs(axis.steps));
-            if (abs_steps == 0) continue;
-
-            /* Set direction */
-            mcu_->set_step_dir(axis.channel, axis.steps < 0 ? 1 : 0);
-
-            /* Compute step interval from cruise speed */
-            double speed_steps = move->cruise_speed * axis.steps_per_mm;
-            if (speed_steps < 1.0) speed_steps = 1.0;
-            uint32_t interval = static_cast<uint32_t>(1000000.0 / speed_steps);
-            if (interval < 10) interval = 10;
-
-            /* Simple constant-velocity segment for now */
-            mcu_->queue_step(axis.channel, interval,
-                           static_cast<uint16_t>(abs_steps), 0);
+        /* Decompose into motor-space through frame decomposer */
+        auto decomposed = decomposer_->decompose(nozzle, *move);
+        if (!decomposed) {
+            spdlog::warn("Move rejected by frame decomposer (nozzle {})", nozzle);
+            continue;
         }
+
+        /* Queue all motor channels */
+        queue_decomposed_move(*decomposed);
     }
 
     /* Check if print is done */
@@ -255,25 +308,15 @@ void Engine::tick_printing() {
 }
 
 void Engine::tick_homing() {
-    /*
-     * Homing sequence:
-     * 1. Move towards endstop at moderate speed
-     * 2. When endstop triggers, stop and back off
-     * 3. Move towards endstop slowly for precision
-     * 4. Set position to 0
-     *
-     * For now, this is a placeholder that transitions to Idle.
-     * Real implementation requires endstop monitoring via MCU status.
-     */
     const auto& status = mcu_->last_status();
 
-    /* Check if all endstops have been hit (simplified) */
     bool x_homed = (status.endstop_state & 0x01) != 0;
     bool y_homed = (status.endstop_state & 0x02) != 0;
     bool z_homed = (status.endstop_state & 0x04) != 0;
 
     if (x_homed && y_homed && z_homed) {
         spdlog::info("Homing complete");
+        decomposer_->reset();
         state_ = PrinterState::Idle;
     }
 }
@@ -315,9 +358,10 @@ bool Engine::start_print(const std::string& gcode_base_path) {
     /* Create sync engine */
     sync_ = std::make_unique<gcode::SyncEngine>(*stream_);
 
-    /* Clear planners */
+    /* Clear planners and decomposer */
     planner_[0]->clear();
     planner_[1]->clear();
+    decomposer_->reset();
 
     state_ = PrinterState::Heating;
     return true;
@@ -343,6 +387,7 @@ void Engine::cancel() {
     stream_.reset();
     planner_[0]->clear();
     planner_[1]->clear();
+    decomposer_->reset();
 
     /* Cool down heaters */
     for (auto& h : heaters_) {
@@ -459,7 +504,6 @@ void Engine::emergency_stop() {
 }
 
 double Engine::progress() const {
-    /* Approximate from sync engine */
     return 0.0;
 }
 

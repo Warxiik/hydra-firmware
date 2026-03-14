@@ -147,8 +147,50 @@ void WebServer::server_thread() {
     CROW_ROUTE(app, "/api/files").methods(crow::HTTPMethod::GET)(
         [this]() {
             json files = json::array();
-            /* TODO: scan gcode directory */
+            for (const auto& f : engine_.file_manager().list_files()) {
+                json fj;
+                fj["name"] = f.name;
+                fj["size"] = f.size_bytes;
+                fj["modified"] = f.modified;
+                fj["isDual"] = f.is_dual;
+                files.push_back(fj);
+            }
             return crow::response(files.dump());
+        });
+
+    CROW_ROUTE(app, "/api/files/upload").methods(crow::HTTPMethod::POST)(
+        [this](const crow::request& req) {
+            auto body = json::parse(req.body, nullptr, false);
+            if (body.is_discarded() || !body.contains("name") || !body.contains("data"))
+                return crow::response(400, R"({"error":"missing name or data"})");
+
+            std::string name = body["name"].get<std::string>();
+            std::string data = body["data"].get<std::string>();
+
+            bool ok = engine_.file_manager().save_file(name, data);
+            return crow::response(ok ? 200 : 500,
+                ok ? R"({"ok":true})" : R"({"error":"save failed"})");
+        });
+
+    CROW_ROUTE(app, "/api/files/delete").methods(crow::HTTPMethod::POST)(
+        [this](const crow::request& req) {
+            auto body = json::parse(req.body, nullptr, false);
+            if (body.is_discarded() || !body.contains("name"))
+                return crow::response(400, R"({"error":"missing name"})");
+
+            std::string name = body["name"].get<std::string>();
+            bool ok = engine_.file_manager().delete_file(name);
+            return crow::response(ok ? 200 : 404,
+                ok ? R"({"ok":true})" : R"({"error":"not found"})");
+        });
+
+    CROW_ROUTE(app, "/api/files/disk").methods(crow::HTTPMethod::GET)(
+        [this]() {
+            auto space = engine_.file_manager().disk_space();
+            json j;
+            j["total"] = space.total;
+            j["free"] = space.free;
+            return crow::response(j.dump());
         });
 
     /* ── WebSocket ──────────────────────────────────────────────── */

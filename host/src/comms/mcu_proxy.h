@@ -7,6 +7,7 @@
 #include "protocol_defs.h"
 #include <memory>
 #include <atomic>
+#include <optional>
 
 namespace hydra::comms {
 
@@ -55,6 +56,7 @@ public:
 
     /* TMC2209 */
     bool tmc_write(uint8_t driver, uint8_t reg, uint32_t value);
+    std::optional<uint32_t> tmc_read(uint8_t driver, uint8_t reg);
 
     /* Queue fullness check */
     bool queue_has_space(uint8_t channel, uint8_t min_free = 64) const;
