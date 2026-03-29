@@ -9,39 +9,31 @@
 namespace hydra::gcode {
 
 /**
- * Manages dual G-code file streams (one per nozzle).
- * Files are named: <base>_nozzle0.gcode, <base>_nozzle1.gcode
+ * Single G-code file stream reader.
+ * Multi-nozzle valve control is handled via M600 V<mask> in the stream.
  */
 class Stream {
 public:
-    bool open(const std::string& base_path, int nozzle_count = 2);
+    bool open(const std::string& path);
     void close();
 
-    /* Read next command from a nozzle's stream */
-    std::optional<Command> next(int nozzle_id);
+    /* Read next command from stream */
+    std::optional<Command> next();
 
     /* Current line number for error reporting */
-    int line_number(int nozzle_id) const;
+    int line_number() const;
 
     /* Skip to a specific line number (for resume from checkpoint) */
-    void skip_to(int nozzle_id, int target_line);
+    void skip_to(int target_line);
 
     /* Has this stream reached EOF? */
-    bool eof(int nozzle_id) const;
-
-    /* Are all streams at EOF? */
-    bool all_done() const;
+    bool eof() const;
 
 private:
-    struct NozzleStream {
-        std::ifstream file;
-        Parser parser;
-        int line_num = 0;
-        bool at_eof = false;
-    };
-
-    NozzleStream streams_[2];
-    int nozzle_count_ = 0;
+    std::ifstream file_;
+    Parser parser_;
+    int line_num_ = 0;
+    bool at_eof_ = false;
 };
 
 } // namespace hydra::gcode

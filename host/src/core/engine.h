@@ -3,7 +3,6 @@
 #include "config.h"
 #include "checkpoint.h"
 #include "../gcode/stream.h"
-#include "../gcode/sync_engine.h"
 #include "../motion/planner.h"
 #include "../motion/frame_decompose.h"
 #include "../motion/homing.h"
@@ -40,7 +39,7 @@ public:
     void shutdown();
 
     /* Print control */
-    bool start_print(const std::string& gcode_base_path);
+    bool start_print(const std::string& gcode_path);
     bool resume_print(); /* Resume from checkpoint */
     void pause();
     void resume();
@@ -50,9 +49,13 @@ public:
     void home_all();
     void home_axes(bool x, bool y, bool z);
     void jog(char axis, double distance_mm, double speed_mm_s);
-    void set_nozzle_temp(int nozzle, double temp_c);
+    void set_nozzle_temp(double temp_c);
     void set_bed_temp(double temp_c);
     void set_fan_speed(int fan, int percent);
+
+    /* Valve control */
+    void set_valve_mask(uint8_t mask);
+    uint8_t valve_mask() const { return valve_mask_; }
 
     /* Filament change */
     void filament_change_confirm(); /* User confirms new filament loaded */
@@ -63,7 +66,7 @@ public:
     /* State queries */
     PrinterState state() const { return state_; }
     double progress() const;
-    double nozzle_temp(int nozzle) const;
+    double nozzle_temp() const;
     double bed_temp() const;
     bool has_checkpoint() const;
 
@@ -83,6 +86,7 @@ private:
     void configure_drivers();
     void queue_decomposed_move(const motion::DecomposedMove& dm);
     void save_checkpoint();
+    void send_valve_state(uint8_t mask);
 
     const Config& config_;
     std::atomic<PrinterState> state_{PrinterState::Idle};
@@ -91,15 +95,17 @@ private:
     /* Subsystems */
     std::unique_ptr<comms::McuProxy> mcu_;
     std::unique_ptr<gcode::Stream> stream_;
-    std::unique_ptr<gcode::SyncEngine> sync_;
-    std::unique_ptr<motion::Planner> planner_[2];
+    std::unique_ptr<motion::Planner> planner_;
     std::unique_ptr<motion::FrameDecomposer> decomposer_;
     std::unique_ptr<motion::HomingController> homing_ctrl_;
-    std::unique_ptr<thermal::Heater> heaters_[3]; /* nozzle0, nozzle1, bed */
+    std::unique_ptr<thermal::Heater> heaters_[2]; /* manifold, bed */
     std::unique_ptr<drivers::TmcConfig> tmc_config_;
     std::unique_ptr<files::FileManager> file_manager_;
     std::unique_ptr<CheckpointManager> checkpoint_mgr_;
     std::unique_ptr<OtaManager> ota_manager_;
+
+    /* Valve state */
+    uint8_t valve_mask_ = 0;
 
     /* Timing */
     std::chrono::steady_clock::time_point last_tick_;

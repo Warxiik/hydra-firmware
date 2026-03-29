@@ -19,7 +19,7 @@ struct HomeCommand {
 struct TempCommand {
     enum Target { Nozzle, Bed };
     Target target;
-    int nozzle_id = 0; /* For multi-nozzle */
+    int nozzle_id = 0;
     double temp_c;
     bool wait = false; /* M109/M190 vs M104/M140 */
 };
@@ -36,24 +36,8 @@ struct AccelCommand {
     std::optional<double> jerk_y;      /* M205 Y */
 };
 
-struct SyncBarrier {
-    std::string id;
-};
-
-struct TaskBegin {
-    uint32_t task_id;
-    uint8_t nozzle;
-    uint32_t layer;
-};
-
-struct TaskEnd {
-    uint32_t task_id;
-};
-
-struct WaitTask {
-    uint32_t task_id;
-    uint8_t nozzle;
-    uint32_t layer;
+struct ValveSet {
+    uint8_t mask = 0;  /* Bitmask: bit N = nozzle N open */
 };
 
 struct SetPosition {
@@ -71,10 +55,7 @@ using Command = std::variant<
     TempCommand,
     FanCommand,
     AccelCommand,
-    SyncBarrier,
-    TaskBegin,
-    TaskEnd,
-    WaitTask,
+    ValveSet,
     SetPosition,
     FilamentChange
 >;

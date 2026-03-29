@@ -17,6 +17,7 @@ struct PlannedMove {
     double exit_speed;
     double acceleration;
     bool is_travel;
+    uint8_t valve_mask = 0;  /* Which nozzles are open during this move */
 };
 
 /**
@@ -36,7 +37,8 @@ public:
 
     explicit Planner(const Config& config);
 
-    void push(const CartesianPos& target, double feedrate, bool is_travel);
+    void push(const CartesianPos& target, double feedrate, bool is_travel,
+              uint8_t valve_mask = 0);
     std::optional<PlannedMove> pop();
     void flush();
     void clear();

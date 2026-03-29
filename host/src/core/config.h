@@ -23,15 +23,15 @@ struct Config {
     double max_z_acceleration = 100.0;
     double junction_deviation = 0.05;   /* mm */
 
-    /* Nozzle offset actuator range (mm from center) */
-    double offset_range_x = 30.0;
-    double offset_range_y = 30.0;
-
     /* Stepper steps/mm */
     double steps_per_mm_xy = 80.0;    /* CoreXY A/B */
     double steps_per_mm_z = 400.0;
     double steps_per_mm_e = 93.0;     /* Extruder */
-    double steps_per_mm_offset = 40.0; /* Nozzle offset actuators */
+
+    /* Multi-nozzle valve array */
+    int valve_count = 4;              /* Number of nozzle valves */
+    double nozzle_spacing = 8.0;     /* Center-to-center spacing (mm) */
+    double valve_delay_ms = 25.0;    /* Pressure equalization delay (ms) */
 
     /* Thermal PID */
     struct PID {
@@ -62,8 +62,6 @@ struct Config {
         uint16_t z_hold_current_ma = 400;
         uint16_t e_run_current_ma = 600;
         uint16_t e_hold_current_ma = 300;
-        uint16_t offset_run_current_ma = 600;
-        uint16_t offset_hold_current_ma = 300;
         uint8_t microsteps = 16;
         bool stealthchop = true;
     };

@@ -37,8 +37,11 @@
 #define CMD_SET_PWM           0x20  /* Set PWM duty {channel, duty_u16}    */
 #define CMD_SET_DIGITAL       0x21  /* Set digital output {pin, value}     */
 
-#define CMD_TMC_WRITE         0x30  /* Write TMC2209 register              */
-#define CMD_TMC_READ          0x31  /* Read TMC2209 register               */
+#define CMD_TMC_WRITE         0x28  /* Write TMC2209 register              */
+#define CMD_TMC_READ          0x29  /* Read TMC2209 register               */
+
+#define CMD_VALVE_SET         0x30  /* Set valve bitmask {mask_u8}         */
+#define CMD_VALVE_GET         0x31  /* Query current valve state            */
 
 /* ── MCU -> Host response IDs ─────────────────────────────────────── */
 
@@ -48,36 +51,43 @@
 #define RSP_STEPPER_POS       0x84  /* Step position response              */
 #define RSP_ENDSTOP_STATE     0x88  /* Endstop triggered notification      */
 #define RSP_TMC_READ          0x91  /* TMC register read response          */
+#define RSP_VALVE_STATE       0x92  /* Current valve bitmask               */
 #define RSP_ERROR             0xFF  /* Error report                        */
 
 /* ── Stepper channels ─────────────────────────────────────────────── */
 
 #define STEPPER_COREXY_A      0    /* CoreXY motor A (X+Y)                */
 #define STEPPER_COREXY_B      1    /* CoreXY motor B (X-Y)                */
-#define STEPPER_OFFSET_X      2    /* Nozzle 1 relative X offset          */
-#define STEPPER_OFFSET_Y      3    /* Nozzle 1 relative Y offset          */
-#define STEPPER_Z             4    /* Bed Z axis                          */
-#define STEPPER_EXTRUDER_0    5    /* Nozzle 0 filament drive             */
-#define STEPPER_EXTRUDER_1    6    /* Nozzle 1 filament drive             */
+#define STEPPER_Z1            2    /* Bed Z axis — lead screw 1           */
+#define STEPPER_Z2            3    /* Bed Z axis — lead screw 2           */
+#define STEPPER_Z3            4    /* Bed Z axis — lead screw 3           */
+#define STEPPER_EXTRUDER      5    /* Filament drive (shared melt chamber)*/
+#define STEPPER_SPARE         6    /* Spare / future use                  */
 #define STEPPER_COUNT         7
+
+/* Valve nozzle bitmask bits */
+#define VALVE_NOZZLE_0        (1 << 0)  /* 0.4mm quality nozzle            */
+#define VALVE_NOZZLE_1        (1 << 1)  /* 0.6mm nozzle                    */
+#define VALVE_NOZZLE_2        (1 << 2)  /* 0.6mm nozzle                    */
+#define VALVE_NOZZLE_3        (1 << 3)  /* 0.8mm nozzle                    */
+#define VALVE_COUNT           4
+#define VALVE_ALL             0x0F
+#define VALVE_QUALITY         VALVE_NOZZLE_0
+#define VALVE_INFILL          (VALVE_NOZZLE_1 | VALVE_NOZZLE_2 | VALVE_NOZZLE_3)
 
 /* ── PWM channels ─────────────────────────────────────────────────── */
 
-#define PWM_HEATER_NOZZLE_0   0
-#define PWM_HEATER_NOZZLE_1   1
-#define PWM_HEATER_BED        2
-#define PWM_FAN_PART_0        3
-#define PWM_FAN_PART_1        4
-#define PWM_FAN_HOTEND_0      5
-#define PWM_FAN_HOTEND_1      6
-#define PWM_CHANNEL_COUNT     7
+#define PWM_HEATER_MANIFOLD   0    /* Shared melt chamber heater          */
+#define PWM_HEATER_BED        1
+#define PWM_FAN_PART          2    /* Part cooling fan                    */
+#define PWM_FAN_HOTEND        3    /* Hotend heatsink fan                 */
+#define PWM_CHANNEL_COUNT     4
 
 /* ── ADC channels ─────────────────────────────────────────────────── */
 
-#define ADC_THERM_NOZZLE_0    0
-#define ADC_THERM_NOZZLE_1    1
-#define ADC_THERM_BED         2
-#define ADC_CHANNEL_COUNT     3
+#define ADC_THERM_MANIFOLD    0    /* Shared manifold thermistor          */
+#define ADC_THERM_BED         1
+#define ADC_CHANNEL_COUNT     2
 
 /* ── Status report structure ──────────────────────────────────────── */
 
@@ -86,6 +96,7 @@ typedef struct __attribute__((packed)) {
     uint16_t adc_raw[ADC_CHANNEL_COUNT];    /* Raw 12-bit ADC readings       */
     uint8_t  endstop_state;                 /* Endstop bitmask (1=triggered) */
     uint8_t  queue_depth[STEPPER_COUNT];    /* Per-stepper queue fill (0-255)*/
+    uint8_t  valve_state;                   /* Current valve bitmask         */
     uint8_t  flags;                         /* Error/status flags            */
 } hydra_status_report_t;
 
@@ -98,7 +109,7 @@ typedef struct __attribute__((packed)) {
 /* ── Queue step command ───────────────────────────────────────────── */
 
 typedef struct __attribute__((packed)) {
-    uint8_t  oid;          /* Stepper channel (0-6)                        */
+    uint8_t  oid;          /* Stepper channel (0-6), see STEPPER_* defines  */
     uint32_t interval;     /* Clock ticks for first step interval          */
     uint16_t count;        /* Number of steps in this segment              */
     int16_t  add;          /* Interval adjustment per step (linear ramp)   */

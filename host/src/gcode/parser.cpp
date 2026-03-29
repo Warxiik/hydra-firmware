@@ -34,25 +34,14 @@ Command Parser::parse(std::string_view line) {
     line = trim(line);
     if (line.empty()) return NopCommand{};
 
-    /* Check for comment-only lines (Hydra sync markers are in comments) */
-    if (line.front() == ';') {
-        return parse_comment(line.substr(1));
-    }
+    /* Skip comment-only lines */
+    if (line.front() == ';') return NopCommand{};
 
     /* Strip inline comments */
     auto comment_pos = line.find(';');
     std::string_view code_part = (comment_pos != std::string_view::npos)
         ? trim(line.substr(0, comment_pos))
         : line;
-
-    /* Check for Hydra markers in inline comments */
-    if (comment_pos != std::string_view::npos) {
-        auto comment = line.substr(comment_pos + 1);
-        auto cmd = parse_comment(comment);
-        if (!std::holds_alternative<NopCommand>(cmd)) {
-            return cmd; /* Sync marker takes priority */
-        }
-    }
 
     if (code_part.empty()) return NopCommand{};
 
@@ -163,8 +152,16 @@ Command Parser::parse_m_command(std::string_view line, int code) {
         cmd.jerk_y = extract_param(line, 'Y');
         return cmd;
     }
-    case 600:
+    case 600: {
+        /* M600 V<mask> — valve control. No V param = filament change. */
+        auto valve_mask = extract_int_param(line, 'V');
+        if (valve_mask) {
+            ValveSet cmd;
+            cmd.mask = static_cast<uint8_t>(*valve_mask & 0x0F);
+            return cmd;
+        }
         return FilamentChange{};
+    }
     case 82: /* Absolute extrusion */
     case 83: /* Relative extrusion */
     case 84: /* Disable motors */
@@ -172,55 +169,6 @@ Command Parser::parse_m_command(std::string_view line, int code) {
     default:
         return NopCommand{};
     }
-}
-
-Command Parser::parse_comment(std::string_view comment) {
-    comment = trim(comment);
-
-    /* ; SYNC BARRIER <id> */
-    if (comment.starts_with("SYNC BARRIER")) {
-        SyncBarrier cmd;
-        cmd.id = std::string(trim(comment.substr(12)));
-        return cmd;
-    }
-
-    /* ; TASK BEGIN <id> nozzle=<n> layer=<l> */
-    if (comment.starts_with("TASK BEGIN")) {
-        TaskBegin cmd{};
-        auto rest = trim(comment.substr(10));
-        std::from_chars(rest.data(), rest.data() + rest.size(), cmd.task_id);
-        auto np = rest.find("nozzle=");
-        if (np != std::string_view::npos)
-            std::from_chars(rest.data() + np + 7, rest.data() + rest.size(), cmd.nozzle);
-        auto lp = rest.find("layer=");
-        if (lp != std::string_view::npos)
-            std::from_chars(rest.data() + lp + 6, rest.data() + rest.size(), cmd.layer);
-        return cmd;
-    }
-
-    /* ; TASK END <id> */
-    if (comment.starts_with("TASK END")) {
-        TaskEnd cmd{};
-        auto rest = trim(comment.substr(8));
-        std::from_chars(rest.data(), rest.data() + rest.size(), cmd.task_id);
-        return cmd;
-    }
-
-    /* ; WAIT TASK <id> ; nozzle <n> layer <l> */
-    if (comment.starts_with("WAIT TASK")) {
-        WaitTask cmd{};
-        auto rest = trim(comment.substr(9));
-        std::from_chars(rest.data(), rest.data() + rest.size(), cmd.task_id);
-        auto np = rest.find("nozzle");
-        if (np != std::string_view::npos)
-            std::from_chars(rest.data() + np + 7, rest.data() + rest.size(), cmd.nozzle);
-        auto lp = rest.find("layer");
-        if (lp != std::string_view::npos)
-            std::from_chars(rest.data() + lp + 6, rest.data() + rest.size(), cmd.layer);
-        return cmd;
-    }
-
-    return NopCommand{};
 }
 
 } // namespace hydra::gcode

@@ -10,7 +10,7 @@ namespace hydra::thermal {
 
 /**
  * Heater controller: combines thermistor reading, PID, and safety.
- * One instance per heater (nozzle0, nozzle1, bed).
+ * One instance per heater (manifold, bed).
  */
 class Heater {
 public:

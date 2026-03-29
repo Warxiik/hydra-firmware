@@ -16,6 +16,7 @@ add_executable(hydra-mcu
     src/protocol.c
     src/adc.c
     src/gpio.c
+    src/valve_control.c
     src/watchdog.c
     src/tmc_uart.c
 )

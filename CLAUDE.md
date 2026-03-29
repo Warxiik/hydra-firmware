@@ -1,6 +1,6 @@
 # Hydra Firmware
 
-Custom firmware for the **Hydra dual-nozzle 3D printer** — a CoreXY printer where two nozzles print simultaneously on the same layer, achieving ~2x print speed.
+Custom firmware for the **Hydra multi-nozzle valve array 3D printer** — a CoreXY printer with a shared melt chamber and 4 solenoid-controlled needle valve nozzles for variable-width extrusion.
 
 ## Project Structure
 
@@ -29,19 +29,34 @@ hydra-firmware/
 | Step mux | 74HC595 shift register | PIO drives 7 axes from 3 GPIO pins |
 | PSU | 24V / 500W (Mean Well RSP-500-24) | Powers everything |
 | Carrier board | Custom PCB (KiCad) | CM5 socket + RP2040 + TMC2209s + power |
+| Valve actuators | 4x 24V solenoid + IRLZ34N MOSFET | Needle valve nozzle selection |
 
-## Architecture: Klipper-Style Split
+## Architecture: Multi-Nozzle Valve Array
+
+```
+Single filament → BMG extruder → shared melt chamber (manifold block)
+                                    ↓
+                    ┌───────────────┼───────────────┐
+                    ↓               ↓               ↓               ↓
+              Valve 0 (0.4mm)  Valve 1 (0.6mm)  Valve 2 (0.6mm)  Valve 3 (0.8mm)
+              quality nozzle   infill nozzle     infill nozzle     infill nozzle
+
+Valve control: M600 V<bitmask>  (e.g. M600 V1 = quality, M600 V14 = 3x infill, M600 V15 = all)
+Extruder speed scales by number of open nozzles.
+```
+
+## Klipper-Style Split
 
 ```
 CM5 (Linux)                          RP2040 (bare metal)
 ┌─────────────────────┐              ┌─────────────────────┐
-│ Dual G-code parser  │              │ PIO step generation │
-│ Move planner x2     │    SPI 4MHz  │ ADC thermistors     │
-│ Barrier sync engine │ ──────────── │ Heater/fan PWM      │
-│ CoreXY kinematics   │   protocol   │ Endstop monitoring  │
-│ Thermal PID         │              │ TMC2209 UART (PIO)  │
-│ React web UI        │              │ Watchdog / e-stop   │
-│ WebSocket server    │              │ Shift-reg step out  │
+│ G-code parser       │              │ PIO step generation │
+│ Move planner        │    SPI 4MHz  │ ADC thermistors     │
+│ CoreXY kinematics   │ ──────────── │ Heater/fan PWM      │
+│ Valve sync          │   protocol   │ Valve GPIO control  │
+│ Thermal PID         │              │ Endstop monitoring  │
+│ React web UI        │              │ TMC2209 UART (PIO)  │
+│ WebSocket server    │              │ Watchdog / e-stop   │
 └─────────────────────┘              └─────────────────────┘
 ```
 
@@ -49,19 +64,8 @@ All "smart" logic runs on the CM5. The RP2040 only does real-time I/O.
 
 ## Companion Repos
 
-- **HydraSlicer** (`C:/Users/nikol/3D!/hydra-slicer/`) — Python slicer that generates dual G-code streams with sync markers
+- **HydraSlicer** (`C:/Users/nikol/3D!/hydra-slicer/`) — Python slicer that generates G-code with M600 V<mask> valve commands
 - **Hydra Web** (TBD) — Marketing site, cloud platform, remote monitoring
-
-## Sync Protocol (from slicer)
-
-The slicer outputs two `.gcode` files (one per nozzle) with these markers:
-
-```gcode
-; SYNC BARRIER <id>              — both nozzles must reach before proceeding
-; TASK BEGIN <id> nozzle=<n> layer=<l>  — task start
-; TASK END <id>                  — task complete
-; WAIT TASK <id> ; nozzle <n> layer <l> — wait for dependency
-```
 
 ## Build Commands
 
@@ -100,18 +104,31 @@ tools/deploy-host.sh <cm5-ip>
 
 | Channel | Motor | Function |
 |---------|-------|----------|
-| 0 | CoreXY A | Shared frame motor A (X+Y) |
-| 1 | CoreXY B | Shared frame motor B (X-Y) |
-| 2 | Offset X | Nozzle 1 relative X offset |
-| 3 | Offset Y | Nozzle 1 relative Y offset |
-| 4 | Z | Bed Z axis |
-| 5 | Extruder 0 | Nozzle 0 filament drive |
-| 6 | Extruder 1 | Nozzle 1 filament drive |
+| 0 | CoreXY A | Frame motor A (X+Y) |
+| 1 | CoreXY B | Frame motor B (X-Y) |
+| 2 | Z1 | Bed Z lead screw 1 |
+| 3 | Z2 | Bed Z lead screw 2 |
+| 4 | Z3 | Bed Z lead screw 3 |
+| 5 | Extruder | Shared filament drive |
+| 6 | Spare | Future use |
+
+## Valve Nozzles
+
+| Valve | GPIO | Nozzle | Use |
+|-------|------|--------|-----|
+| 0 | GP13 | 0.4mm | Quality / detail |
+| 1 | GP16 | 0.6mm | Infill / support |
+| 2 | GP18 | 0.6mm | Infill / support |
+| 3 | GP21 | 0.8mm | Infill / support |
+
+Bitmask control: `0b0001` = quality, `0b1110` = 3x infill, `0b1111` = all open
 
 ## Key Design Decisions
 
-1. **Why custom firmware, not Klipper?** — No existing firmware supports parallel G-code streams for simultaneous multi-nozzle printing
-2. **Why SPI not USB for host↔MCU?** — Deterministic latency, no USB stack jitter, simpler on custom carrier board
-3. **Why RP2040 not STM32?** — PIO state machines give hardware-level step timing precision; $1 cost; shift-register approach fits 7 axes
-4. **Why web UI (React)?** — Same UI on touchscreen (Chromium kiosk) and remote browser; single codebase; hot-reload dev
-5. **Why single RP2040?** — Shift-register PIO uses only 2-3 state machines for all 7 steppers; plenty of headroom
+1. **Why multi-nozzle valve array?** — Variable extrusion width without tool changes; 1 filament path, 4 outlets; truly novel approach
+2. **Why needle valves?** — Precise flow control, fast actuation (~5ms), no drool/stringing between switches
+3. **Why custom firmware, not Klipper?** — No existing firmware supports valve-synchronized multi-nozzle printing
+4. **Why SPI not USB for host↔MCU?** — Deterministic latency, no USB stack jitter, simpler on custom carrier board
+5. **Why RP2040 not STM32?** — PIO state machines give hardware-level step timing precision; $1 cost; shift-register approach fits 7 axes
+6. **Why web UI (React)?** — Same UI on touchscreen (Chromium kiosk) and remote browser; single codebase; hot-reload dev
+7. **Why 3x Z lead screws?** — Auto bed leveling via independent Z motors (replacing single Z + offset actuators)

@@ -12,12 +12,11 @@ struct GcodeFileInfo {
     std::string path;           /* Full path */
     uint64_t size_bytes = 0;    /* File size */
     std::string modified;       /* ISO 8601 timestamp */
-    bool is_dual = false;       /* True if _nozzle0/_nozzle1 pair exists */
 };
 
 /**
  * Manages G-code files in the printer's gcode directory.
- * Supports listing, uploading, deleting, and detecting dual-nozzle file pairs.
+ * Single-stream G-code files with valve control via M600 V<mask>.
  */
 class FileManager {
 public:
@@ -51,9 +50,6 @@ private:
 
     /** Format file modification time as ISO 8601. */
     static std::string format_time(std::filesystem::file_time_type ftime);
-
-    /** Check if a dual-nozzle pair exists for a base name. */
-    bool has_dual_pair(const std::string& base_name) const;
 
     std::filesystem::path gcode_dir_;
 };

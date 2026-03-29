@@ -42,12 +42,17 @@ public:
     bool tmc_write(uint8_t driver, uint8_t reg, uint32_t value);
     std::optional<uint32_t> tmc_read(uint8_t driver, uint8_t reg);
 
+    /* Valve control */
+    bool valve_set(uint8_t mask);
+    std::optional<uint8_t> valve_get();
+
     /* Status report (parsed from RSP_STATUS) */
     struct StatusReport {
         uint32_t mcu_clock;
         uint16_t adc_raw[ADC_CHANNEL_COUNT];
         uint8_t endstop_state;
         uint8_t queue_depth[STEPPER_COUNT];
+        uint8_t valve_state;
         uint8_t flags;
     };
 

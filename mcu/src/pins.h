@@ -4,8 +4,13 @@
 /**
  * RP2040 pin assignments for the Hydra carrier board.
  *
- * Total GPIO used: 23 of 30 available.
- * Remaining: GP21, GP24, GP25, GP26 (GP26 is ADC0, reserved as spare ADC).
+ * Multi-nozzle valve array architecture:
+ *   - Standard CoreXY (2 motors) + 3x Z lead screws + 1 extruder
+ *   - 4 solenoid needle valves for nozzle selection
+ *   - Shared melt chamber with single heater + thermistor
+ *
+ * Total GPIO used: 24 of 30 available.
+ * Remaining: GP24, GP25, GP26 (GP26 is ADC0, reserved as spare ADC).
  */
 
 /* ── SPI slave (host communication) ──────────────────────────────── */
@@ -29,15 +34,18 @@
 #define PIN_ENDSTOP_Z  11  /* GP11 — Z axis endstop (bed probe) */
 
 /* ── Heater MOSFET outputs (slow PWM via software timer) ─────────── */
-#define PIN_HEATER_N0  12  /* GP12 — Nozzle 0 heater     */
-#define PIN_HEATER_N1  13  /* GP13 — Nozzle 1 heater     */
-#define PIN_HEATER_BED 14  /* GP14 — Heated bed          */
+#define PIN_HEATER_MANIFOLD 12  /* GP12 — Shared melt chamber heater */
+#define PIN_HEATER_BED      14  /* GP14 — Heated bed                 */
 
 /* ── Fan PWM outputs (hardware PWM, 25kHz for silence) ───────────── */
-#define PIN_FAN_PART_0 15  /* GP15 — Part cooling fan 0  */
-#define PIN_FAN_PART_1 16  /* GP16 — Part cooling fan 1  */
-#define PIN_FAN_HE_0   17  /* GP17 — Hotend heatsink fan 0 */
-#define PIN_FAN_HE_1   18  /* GP18 — Hotend heatsink fan 1 */
+#define PIN_FAN_PART   15  /* GP15 — Part cooling fan    */
+#define PIN_FAN_HE     17  /* GP17 — Hotend heatsink fan */
+
+/* ── Solenoid valve outputs (GPIO → IRLZ34N MOSFET → solenoid) ──── */
+#define PIN_VALVE_0    13  /* GP13 — Nozzle 0 (0.4mm quality)  */
+#define PIN_VALVE_1    16  /* GP16 — Nozzle 1 (0.6mm)          */
+#define PIN_VALVE_2    18  /* GP18 — Nozzle 2 (0.6mm)          */
+#define PIN_VALVE_3    21  /* GP21 — Nozzle 3 (0.8mm)          */
 
 /* ── Status LED ──────────────────────────────────────────────────── */
 #define PIN_LED_STATUS 19  /* GP19 — Status/error LED    */
@@ -47,9 +55,8 @@
 
 /* ── Thermistor ADC inputs ───────────────────────────────────────── */
 /* RP2040 ADC channels are on GP26-GP29 */
-#define PIN_ADC_THERM_N0  27  /* GP27 — ADC1: Nozzle 0 thermistor */
-#define PIN_ADC_THERM_N1  28  /* GP28 — ADC2: Nozzle 1 thermistor */
-#define PIN_ADC_THERM_BED 29  /* GP29 — ADC3: Bed thermistor      */
+#define PIN_ADC_THERM_MANIFOLD 27  /* GP27 — ADC1: Manifold thermistor */
+#define PIN_ADC_THERM_BED      29  /* GP29 — ADC3: Bed thermistor      */
 
 /* ── Shift register bit mapping ──────────────────────────────────── */
 /*

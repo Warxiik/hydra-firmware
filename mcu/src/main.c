@@ -9,6 +9,7 @@
 #include "protocol.h"
 #include "adc.h"
 #include "gpio.h"
+#include "valve_control.h"
 #include "watchdog.h"
 
 /*
@@ -42,6 +43,7 @@ int main(void) {
 
     /* Initialize subsystems */
     hydra_gpio_init();
+    valve_control_init();
     hydra_adc_init();
     stepper_init();
     transport_init();

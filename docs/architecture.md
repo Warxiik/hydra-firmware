@@ -4,8 +4,8 @@
 
 Hydra uses a split architecture inspired by Klipper:
 
-- **Host (Raspberry Pi CM5)**: All "smart" logic — G-code parsing, motion planning, synchronization, thermal control, UI
-- **MCU (RP2040)**: Real-time I/O — step pulse generation, ADC reading, PWM output, endstop monitoring
+- **Host (Raspberry Pi CM5)**: All "smart" logic — G-code parsing, motion planning, valve synchronization, thermal control, UI
+- **MCU (RP2040)**: Real-time I/O — step pulse generation, ADC reading, PWM output, valve GPIO control, endstop monitoring
 
 This split ensures precise step timing (via PIO hardware) while keeping complex logic on a powerful Linux system.
 
@@ -17,24 +17,25 @@ Host and MCU communicate over SPI at 4 MHz. The protocol uses:
 - **Reliability**: Sequence numbers + ACK/retransmit
 - **Clock sync**: Periodic `GET_CLOCK` to map host time ↔ MCU time
 - **Step commands**: `queue_step {channel, interval, count, add}` — compact encoding of acceleration ramps
+- **Valve commands**: `VALVE_SET {mask}` / `VALVE_GET` — control solenoid needle valves
 
 See `shared/protocol_defs.h` for message definitions.
 
-## Dual-Nozzle Coordination
+## Multi-Nozzle Valve Array
 
-The HydraSlicer generates two G-code files with synchronization markers:
+The printer uses a shared melt chamber with 4 solenoid-controlled needle valve nozzles:
 
-1. **Barrier mode**: `; SYNC BARRIER <id>` — both nozzles must reach the barrier before proceeding
-2. **Task mode**: `; WAIT TASK <id>` / `; TASK BEGIN/END <id>` — dependency-based pipelining
-
-The `SyncEngine` in the host software coordinates both streams, ensuring nozzles wait for each other when required.
+- **Valve control via G-code**: `M600 V<bitmask>` selects which nozzles are open
+- **Single G-code stream**: No synchronization needed — one file, one planner
+- **Flow scaling**: Extruder speed is multiplied by the number of open nozzles
+- **Nozzle sizes**: 0.4mm (quality), 2x 0.6mm (infill), 0.8mm (infill)
 
 ## Motion System
 
 - **CoreXY kinematics**: Two motors (A, B) drive the shared frame. `A = X+Y`, `B = X-Y`.
-- **Nozzle offset**: Nozzle 1 has independent X/Y offset actuators relative to the frame.
-- **Per-nozzle planning**: Each nozzle has its own lookahead buffer and velocity profile generator.
-- **Combined acceleration**: The shared frame has a maximum acceleration budget; both nozzles' demands must fit within it.
+- **3x Z lead screws**: Independent Z motors for auto bed leveling.
+- **Single planner**: One lookahead buffer, one velocity profile generator.
+- **Valve-aware moves**: Each planned move carries a valve bitmask for flow routing.
 
 ## Step Generation
 
@@ -49,5 +50,6 @@ The RP2040's PIO (Programmable I/O) generates step pulses:
 
 - PID runs on the host at 10 Hz
 - MCU reads thermistors via ADC at 100 Hz and reports to host
-- MCU has hard thermal limits (300°C nozzle, 120°C bed) — kills heaters independently of host
+- Single manifold heater for the shared melt chamber
+- MCU has hard thermal limits (300°C manifold, 120°C bed) — kills heaters independently of host
 - Watchdog: MCU kills heaters if host goes silent for 500ms

@@ -36,11 +36,10 @@ std::string WebServer::state_to_string(PrinterState state) const {
 json WebServer::build_status_json() const {
     json j;
     j["state"] = state_to_string(engine_.state());
-    j["nozzle0Temp"] = engine_.nozzle_temp(0);
-    j["nozzle0Target"] = 0; /* TODO: expose targets from engine */
-    j["nozzle1Temp"] = engine_.nozzle_temp(1);
-    j["nozzle1Target"] = 0;
+    j["manifoldTemp"] = engine_.nozzle_temp();
+    j["manifoldTarget"] = 0; /* TODO: expose targets from engine */
     j["bedTemp"] = engine_.bed_temp();
+    j["valveMask"] = engine_.valve_mask();
     j["bedTarget"] = 0;
     j["progress"] = engine_.progress();
     j["currentLayer"] = 0;
@@ -149,9 +148,17 @@ void WebServer::server_thread() {
         [this](const crow::request& req) {
             auto body = json::parse(req.body, nullptr, false);
             if (body.is_discarded()) return crow::response(400);
-            int nozzle = body.value("nozzle", 0);
             double temp = body.value("temp", 0.0);
-            engine_.set_nozzle_temp(nozzle, temp);
+            engine_.set_nozzle_temp(temp);
+            return crow::response(R"({"ok":true})");
+        });
+
+    CROW_ROUTE(app, "/api/valve").methods(crow::HTTPMethod::POST)(
+        [this](const crow::request& req) {
+            auto body = json::parse(req.body, nullptr, false);
+            if (body.is_discarded()) return crow::response(400);
+            int mask = body.value("mask", 0);
+            engine_.set_valve_mask(static_cast<uint8_t>(mask));
             return crow::response(R"({"ok":true})");
         });
 
@@ -185,7 +192,7 @@ void WebServer::server_thread() {
                 fj["name"] = f.name;
                 fj["size"] = f.size_bytes;
                 fj["modified"] = f.modified;
-                fj["isDual"] = f.is_dual;
+                /* fj["isDual"] removed — single-stream valve architecture */
                 files.push_back(fj);
             }
             return crow::response(files.dump());
@@ -312,7 +319,10 @@ void WebServer::server_thread() {
                 if (msg.value("target", "") == "bed")
                     engine_.set_bed_temp(msg.value("temp", 0.0));
                 else
-                    engine_.set_nozzle_temp(msg.value("nozzle", 0), msg.value("temp", 0.0));
+                    engine_.set_nozzle_temp(msg.value("temp", 0.0));
+            }
+            else if (type == "set_valve") {
+                engine_.set_valve_mask(static_cast<uint8_t>(msg.value("mask", 0)));
             }
             else if (type == "set_speed") {
                 /* TODO: speed override */

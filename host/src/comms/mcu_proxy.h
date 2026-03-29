@@ -44,6 +44,7 @@ public:
         uint16_t adc_raw[ADC_CHANNEL_COUNT] = {};
         uint8_t endstop_state = 0;
         uint8_t queue_depth[STEPPER_COUNT] = {};
+        uint8_t valve_state = 0;
         uint8_t flags = 0;
     };
 
@@ -65,6 +66,10 @@ public:
     /* TMC2209 */
     bool tmc_write(uint8_t driver, uint8_t reg, uint32_t value);
     std::optional<uint32_t> tmc_read(uint8_t driver, uint8_t reg);
+
+    /* Valve control */
+    bool send_valve_set(uint8_t mask);
+    std::optional<uint8_t> send_valve_get();
 
     /* Queue fullness check */
     bool queue_has_space(uint8_t channel, uint8_t min_free = 64) const;

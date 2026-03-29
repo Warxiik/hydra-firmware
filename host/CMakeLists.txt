@@ -71,16 +71,12 @@ add_executable(hydra-host
     src/core/config.cpp
     src/gcode/parser.cpp
     src/gcode/stream.cpp
-    src/gcode/sync_engine.cpp
     src/motion/planner.cpp
     src/motion/trapezoid.cpp
     src/motion/corexy.cpp
-    src/motion/nozzle_offset.cpp
     src/motion/step_compress.cpp
-    src/motion/collision.cpp
     src/motion/frame_decompose.cpp
     src/motion/homing.cpp
-    src/motion/calibration.cpp
     src/drivers/tmc_config.cpp
     src/files/file_manager.cpp
     src/core/checkpoint.cpp

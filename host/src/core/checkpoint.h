@@ -15,22 +15,22 @@ struct PrintCheckpoint {
     /* G-code file identification */
     std::string gcode_path;
 
-    /* Per-nozzle stream position (line numbers) */
-    uint32_t nozzle0_line = 0;
-    uint32_t nozzle1_line = 0;
+    /* Stream position (line number) */
+    uint32_t line = 0;
 
-    /* Nozzle positions at checkpoint */
+    /* Nozzle position at checkpoint */
     double pos_x = 0, pos_y = 0, pos_z = 0;
-    double e0 = 0, e1 = 0;
+    double e = 0;
 
     /* Heater targets */
-    double nozzle0_target = 0;
-    double nozzle1_target = 0;
+    double manifold_target = 0;
     double bed_target = 0;
 
-    /* Fan speeds (0-255) */
-    int fan0_speed = 0;
-    int fan1_speed = 0;
+    /* Fan speed (0-255) */
+    int fan_speed = 0;
+
+    /* Valve state */
+    uint8_t valve_mask = 0;
 
     /* Print progress */
     uint32_t layer = 0;

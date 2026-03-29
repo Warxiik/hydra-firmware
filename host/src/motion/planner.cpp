@@ -7,7 +7,8 @@ namespace hydra::motion {
 
 Planner::Planner(const Config& config) : config_(config) {}
 
-void Planner::push(const CartesianPos& target, double feedrate, bool is_travel) {
+void Planner::push(const CartesianPos& target, double feedrate, bool is_travel,
+                   uint8_t valve_mask) {
     if (count_ >= LOOKAHEAD_SIZE) return; /* Buffer full */
 
     PlannedMove move;
@@ -39,6 +40,7 @@ void Planner::push(const CartesianPos& target, double feedrate, bool is_travel) 
     move.acceleration = config_.max_acceleration;
     move.entry_speed = 0.0;  /* Will be refined by recalculate() */
     move.exit_speed = 0.0;
+    move.valve_mask = valve_mask;
 
     /* Insert into buffer */
     int idx = (head_ + count_) % LOOKAHEAD_SIZE;

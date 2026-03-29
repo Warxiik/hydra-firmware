@@ -30,6 +30,11 @@ std::optional<Config> Config::load(const std::string& path) {
         cfg.steps_per_mm_z = tbl["stepper"]["steps_per_mm_z"].value_or(cfg.steps_per_mm_z);
         cfg.steps_per_mm_e = tbl["stepper"]["steps_per_mm_e"].value_or(cfg.steps_per_mm_e);
 
+        /* Valve array */
+        cfg.valve_count = tbl["valve"]["count"].value_or(cfg.valve_count);
+        cfg.nozzle_spacing = tbl["valve"]["nozzle_spacing"].value_or(cfg.nozzle_spacing);
+        cfg.valve_delay_ms = tbl["valve"]["delay_ms"].value_or(cfg.valve_delay_ms);
+
         /* Thermal PID */
         if (auto pid = tbl["thermal"]["nozzle_pid"]; pid.is_table()) {
             cfg.nozzle_pid.kp = pid["kp"].value_or(cfg.nozzle_pid.kp);
@@ -40,8 +45,8 @@ std::optional<Config> Config::load(const std::string& path) {
         /* Paths */
         cfg.gcode_dir = tbl["paths"]["gcode_dir"].value_or(cfg.gcode_dir);
 
-        spdlog::info("Config loaded: {}x{}x{}mm, {:.0f}mm/s max",
-                     cfg.bed_x, cfg.bed_y, cfg.bed_z, cfg.max_velocity);
+        spdlog::info("Config loaded: {}x{}x{}mm, {:.0f}mm/s max, {} valves",
+                     cfg.bed_x, cfg.bed_y, cfg.bed_z, cfg.max_velocity, cfg.valve_count);
         return cfg;
     } catch (const toml::parse_error& err) {
         spdlog::error("Config parse error: {}", err.what());

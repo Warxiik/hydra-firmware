@@ -8,7 +8,6 @@ spi_speed_hz = 4_000_000
 bed_x = 220.0  # mm
 bed_y = 220.0
 bed_z = 250.0
-nozzle_count = 2
 
 [motion]
 max_velocity = 300.0         # mm/s
@@ -21,7 +20,11 @@ junction_deviation = 0.05    # mm
 steps_per_mm_xy = 80.0       # CoreXY A/B (20T pulley, 2mm GT2, 16 microstep)
 steps_per_mm_z = 400.0       # T8 leadscrew, 16 microstep
 steps_per_mm_e = 93.0        # BMG-style extruder, 16 microstep
-steps_per_mm_offset = 40.0   # Nozzle offset actuators
+
+[valve]
+count = 4                    # Number of nozzle valves
+nozzle_spacing = 8.0         # Center-to-center spacing (mm)
+delay_ms = 25.0              # Pressure equalization delay after valve change (ms)
 
 [thermal.nozzle_pid]
 kp = 20.0

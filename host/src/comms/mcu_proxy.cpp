@@ -90,6 +90,7 @@ bool McuProxy::poll_status() {
     std::copy(std::begin(report->adc_raw), std::end(report->adc_raw), std::begin(status_.adc_raw));
     status_.endstop_state = report->endstop_state;
     std::copy(std::begin(report->queue_depth), std::end(report->queue_depth), std::begin(status_.queue_depth));
+    status_.valve_state = report->valve_state;
     status_.flags = report->flags;
     return true;
 }
@@ -125,6 +126,16 @@ bool McuProxy::tmc_write(uint8_t driver, uint8_t reg, uint32_t value) {
 std::optional<uint32_t> McuProxy::tmc_read(uint8_t driver, uint8_t reg) {
     if (!protocol_) return std::nullopt;
     return protocol_->tmc_read(driver, reg);
+}
+
+bool McuProxy::send_valve_set(uint8_t mask) {
+    if (!protocol_) return false;
+    return protocol_->valve_set(mask);
+}
+
+std::optional<uint8_t> McuProxy::send_valve_get() {
+    if (!protocol_) return std::nullopt;
+    return protocol_->valve_get();
 }
 
 bool McuProxy::queue_has_space(uint8_t channel, uint8_t min_free) const {

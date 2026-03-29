@@ -27,18 +27,15 @@ bool CheckpointManager::exists() const {
 bool CheckpointManager::save(const PrintCheckpoint& cp) {
     json j;
     j["gcode_path"] = cp.gcode_path;
-    j["nozzle0_line"] = cp.nozzle0_line;
-    j["nozzle1_line"] = cp.nozzle1_line;
+    j["line"] = cp.line;
     j["pos_x"] = cp.pos_x;
     j["pos_y"] = cp.pos_y;
     j["pos_z"] = cp.pos_z;
-    j["e0"] = cp.e0;
-    j["e1"] = cp.e1;
-    j["nozzle0_target"] = cp.nozzle0_target;
-    j["nozzle1_target"] = cp.nozzle1_target;
+    j["e"] = cp.e;
+    j["manifold_target"] = cp.manifold_target;
     j["bed_target"] = cp.bed_target;
-    j["fan0_speed"] = cp.fan0_speed;
-    j["fan1_speed"] = cp.fan1_speed;
+    j["fan_speed"] = cp.fan_speed;
+    j["valve_mask"] = cp.valve_mask;
     j["layer"] = cp.layer;
     j["progress_pct"] = cp.progress_pct;
     j["elapsed_s"] = cp.elapsed_s;
@@ -94,18 +91,15 @@ bool CheckpointManager::load(PrintCheckpoint& cp_out) {
     }
 
     cp_out.gcode_path = j.value("gcode_path", "");
-    cp_out.nozzle0_line = j.value("nozzle0_line", 0u);
-    cp_out.nozzle1_line = j.value("nozzle1_line", 0u);
+    cp_out.line = j.value("line", 0u);
     cp_out.pos_x = j.value("pos_x", 0.0);
     cp_out.pos_y = j.value("pos_y", 0.0);
     cp_out.pos_z = j.value("pos_z", 0.0);
-    cp_out.e0 = j.value("e0", 0.0);
-    cp_out.e1 = j.value("e1", 0.0);
-    cp_out.nozzle0_target = j.value("nozzle0_target", 0.0);
-    cp_out.nozzle1_target = j.value("nozzle1_target", 0.0);
+    cp_out.e = j.value("e", 0.0);
+    cp_out.manifold_target = j.value("manifold_target", 0.0);
     cp_out.bed_target = j.value("bed_target", 0.0);
-    cp_out.fan0_speed = j.value("fan0_speed", 0);
-    cp_out.fan1_speed = j.value("fan1_speed", 0);
+    cp_out.fan_speed = j.value("fan_speed", 0);
+    cp_out.valve_mask = j.value("valve_mask", 0);
     cp_out.layer = j.value("layer", 0u);
     cp_out.progress_pct = j.value("progress_pct", 0.0);
     cp_out.elapsed_s = j.value("elapsed_s", 0.0);

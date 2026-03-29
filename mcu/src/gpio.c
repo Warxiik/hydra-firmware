@@ -5,11 +5,11 @@
 #include "hardware/pwm.h"
 
 static const uint8_t heater_pins[] = {
-    PIN_HEATER_N0, PIN_HEATER_N1, PIN_HEATER_BED
+    PIN_HEATER_MANIFOLD, PIN_HEATER_BED
 };
 
 static const uint8_t fan_pins[] = {
-    PIN_FAN_PART_0, PIN_FAN_PART_1, PIN_FAN_HE_0, PIN_FAN_HE_1
+    PIN_FAN_PART, PIN_FAN_HE
 };
 
 static const uint8_t endstop_pins[] = {
@@ -18,14 +18,14 @@ static const uint8_t endstop_pins[] = {
 
 void hydra_gpio_init(void) {
     /* Heater outputs (start OFF) */
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         gpio_init(heater_pins[i]);
         gpio_set_dir(heater_pins[i], GPIO_OUT);
         gpio_put(heater_pins[i], 0);
     }
 
     /* Fan PWM outputs */
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 2; i++) {
         gpio_set_function(fan_pins[i], GPIO_FUNC_PWM);
         uint slice = pwm_gpio_to_slice_num(fan_pins[i]);
         pwm_set_wrap(slice, 4999); /* 125MHz / 5000 = 25kHz */
@@ -47,13 +47,12 @@ void hydra_gpio_init(void) {
 }
 
 void hydra_gpio_set_pwm(uint8_t channel, uint16_t duty) {
-    if (channel < 3) {
+    if (channel < 2) {
         /* Heater channels: software PWM (just on/off for now) */
         gpio_put(heater_pins[channel], duty > 0 ? 1 : 0);
-        /* TODO: Implement software PWM timer for proportional heater control */
     } else if (channel < PWM_CHANNEL_COUNT) {
         /* Fan channels: hardware PWM */
-        uint8_t fan_idx = channel - 3;
+        uint8_t fan_idx = channel - 2;
         uint slice = pwm_gpio_to_slice_num(fan_pins[fan_idx]);
         uint chan = pwm_gpio_to_channel(fan_pins[fan_idx]);
         /* Scale 0-65535 to 0-4999 */
@@ -63,7 +62,7 @@ void hydra_gpio_set_pwm(uint8_t channel, uint16_t duty) {
 }
 
 void hydra_gpio_kill_heaters(void) {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         gpio_put(heater_pins[i], 0);
     }
 }

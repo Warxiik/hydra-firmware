@@ -55,49 +55,12 @@ TEST_F(ParserTest, ParseM109NozzleTempWait) {
     EXPECT_DOUBLE_EQ(temp->temp_c, 235.0);
 }
 
-TEST_F(ParserTest, ParseSyncBarrier) {
-    auto cmd = parser.parse("; SYNC BARRIER INIT");
-    auto* barrier = std::get_if<SyncBarrier>(&cmd);
-    ASSERT_NE(barrier, nullptr);
-    EXPECT_EQ(barrier->id, "INIT");
-}
-
-TEST_F(ParserTest, ParseSyncBarrierNumeric) {
-    auto cmd = parser.parse("; SYNC BARRIER 42");
-    auto* barrier = std::get_if<SyncBarrier>(&cmd);
-    ASSERT_NE(barrier, nullptr);
-    EXPECT_EQ(barrier->id, "42");
-}
-
-TEST_F(ParserTest, ParseTaskBegin) {
-    auto cmd = parser.parse("; TASK BEGIN 7 nozzle=0 layer=3");
-    auto* begin = std::get_if<TaskBegin>(&cmd);
-    ASSERT_NE(begin, nullptr);
-    EXPECT_EQ(begin->task_id, 7u);
-    EXPECT_EQ(begin->nozzle, 0);
-    EXPECT_EQ(begin->layer, 3u);
-}
-
-TEST_F(ParserTest, ParseTaskEnd) {
-    auto cmd = parser.parse("; TASK END 7");
-    auto* end = std::get_if<TaskEnd>(&cmd);
-    ASSERT_NE(end, nullptr);
-    EXPECT_EQ(end->task_id, 7u);
-}
-
-TEST_F(ParserTest, ParseWaitTask) {
-    auto cmd = parser.parse("; WAIT TASK 5 ; nozzle 0 layer 2");
-    auto* wait = std::get_if<WaitTask>(&cmd);
-    ASSERT_NE(wait, nullptr);
-    EXPECT_EQ(wait->task_id, 5u);
-}
-
 TEST_F(ParserTest, EmptyLineReturnsNop) {
     auto cmd = parser.parse("");
     EXPECT_TRUE(std::holds_alternative<NopCommand>(cmd));
 }
 
-TEST_F(ParserTest, CommentOnlyNonSyncReturnsNop) {
+TEST_F(ParserTest, CommentOnlyReturnsNop) {
     auto cmd = parser.parse("; this is a normal comment");
     EXPECT_TRUE(std::holds_alternative<NopCommand>(cmd));
 }
@@ -114,4 +77,37 @@ TEST_F(ParserTest, ParseFanOff) {
     auto* fan = std::get_if<FanCommand>(&cmd);
     ASSERT_NE(fan, nullptr);
     EXPECT_EQ(fan->speed, -1);
+}
+
+TEST_F(ParserTest, ParseM600ValveSet) {
+    auto cmd = parser.parse("M600 V15");
+    auto* valve = std::get_if<ValveSet>(&cmd);
+    ASSERT_NE(valve, nullptr);
+    EXPECT_EQ(valve->mask, 0x0F);
+}
+
+TEST_F(ParserTest, ParseM600ValveQuality) {
+    auto cmd = parser.parse("M600 V1");
+    auto* valve = std::get_if<ValveSet>(&cmd);
+    ASSERT_NE(valve, nullptr);
+    EXPECT_EQ(valve->mask, 0x01);
+}
+
+TEST_F(ParserTest, ParseM600ValveInfill) {
+    auto cmd = parser.parse("M600 V14");
+    auto* valve = std::get_if<ValveSet>(&cmd);
+    ASSERT_NE(valve, nullptr);
+    EXPECT_EQ(valve->mask, 0x0E);
+}
+
+TEST_F(ParserTest, ParseM600FilamentChange) {
+    auto cmd = parser.parse("M600");
+    EXPECT_TRUE(std::holds_alternative<FilamentChange>(cmd));
+}
+
+TEST_F(ParserTest, ParseM600ValveCloseAll) {
+    auto cmd = parser.parse("M600 V0");
+    auto* valve = std::get_if<ValveSet>(&cmd);
+    ASSERT_NE(valve, nullptr);
+    EXPECT_EQ(valve->mask, 0x00);
 }

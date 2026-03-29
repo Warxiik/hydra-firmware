@@ -154,8 +154,23 @@ std::optional<Protocol::StatusReport> Protocol::get_status() {
     std::memcpy(report.adc_raw, raw->adc_raw, sizeof(report.adc_raw));
     report.endstop_state = raw->endstop_state;
     std::memcpy(report.queue_depth, raw->queue_depth, sizeof(report.queue_depth));
+    report.valve_state = raw->valve_state;
     report.flags = raw->flags;
     return report;
+}
+
+bool Protocol::valve_set(uint8_t mask) {
+    uint8_t buf[2] = {CMD_VALVE_SET, mask};
+    auto rsp = command(buf, 2);
+    return rsp && !rsp->empty() && (*rsp)[0] == RSP_ACK;
+}
+
+std::optional<uint8_t> Protocol::valve_get() {
+    uint8_t cmd = CMD_VALVE_GET;
+    auto rsp = command(&cmd, 1);
+    if (!rsp || rsp->size() < 2 || (*rsp)[0] != RSP_VALVE_STATE)
+        return std::nullopt;
+    return (*rsp)[1];
 }
 
 } // namespace hydra::comms

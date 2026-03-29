@@ -37,10 +37,6 @@ bool FileManager::is_valid_filename(const std::string& filename) const {
 }
 
 std::string FileManager::format_time(fs::file_time_type ftime) {
-    /*
-     * Convert file_time_type to a string.
-     * C++20 provides direct clock conversion via file_clock.
-     */
     auto sctp = std::chrono::time_point_cast<std::chrono::seconds>(
         std::chrono::file_clock::to_sys(ftime));
     auto time_t_val = std::chrono::system_clock::to_time_t(sctp);
@@ -55,12 +51,6 @@ std::string FileManager::format_time(fs::file_time_type ftime) {
     std::ostringstream oss;
     oss << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%SZ");
     return oss.str();
-}
-
-bool FileManager::has_dual_pair(const std::string& base_name) const {
-    auto n0 = gcode_dir_ / (base_name + "_nozzle0.gcode");
-    auto n1 = gcode_dir_ / (base_name + "_nozzle1.gcode");
-    return fs::exists(n0) && fs::exists(n1);
 }
 
 std::vector<GcodeFileInfo> FileManager::list_files() const {
@@ -78,23 +68,11 @@ std::vector<GcodeFileInfo> FileManager::list_files() const {
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (ext != ".gcode" && ext != ".g" && ext != ".gco") continue;
 
-        /* Skip _nozzle1 files — they'll be detected as part of a dual pair */
-        std::string stem = entry.path().stem().string();
-        if (stem.size() > 8 && stem.substr(stem.size() - 8) == "_nozzle1") continue;
-
         GcodeFileInfo info;
         info.name = entry.path().filename().string();
         info.path = entry.path().string();
         info.size_bytes = entry.file_size(ec);
         info.modified = format_time(entry.last_write_time(ec));
-
-        /* Check for dual-nozzle pair */
-        if (stem.size() > 8 && stem.substr(stem.size() - 8) == "_nozzle0") {
-            std::string base = stem.substr(0, stem.size() - 8);
-            info.is_dual = has_dual_pair(base);
-            /* Use the base name as the display name */
-            info.name = base + ".gcode";
-        }
 
         files.push_back(std::move(info));
     }
@@ -160,18 +138,6 @@ bool FileManager::delete_file(const std::string& filename) {
     }
 
     spdlog::info("Deleted file: {}", filename);
-
-    /* Also delete the _nozzle1 pair if this was a _nozzle0 file */
-    std::string stem = fs::path(filename).stem().string();
-    if (stem.size() > 8 && stem.substr(stem.size() - 8) == "_nozzle0") {
-        std::string pair_name = stem.substr(0, stem.size() - 8) + "_nozzle1.gcode";
-        auto pair_path = gcode_dir_ / pair_name;
-        if (fs::exists(pair_path, ec)) {
-            fs::remove(pair_path, ec);
-            spdlog::info("Deleted dual pair file: {}", pair_name);
-        }
-    }
-
     return true;
 }
 

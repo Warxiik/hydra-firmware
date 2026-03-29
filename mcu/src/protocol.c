@@ -4,6 +4,7 @@
 #include "tmc_uart.h"
 #include "adc.h"
 #include "gpio.h"
+#include "valve_control.h"
 #include "watchdog.h"
 #include "protocol_defs.h"
 #include "config.h"
@@ -44,6 +45,7 @@ static void handle_command(const uint8_t *data, uint16_t len) {
     case CMD_EMERGENCY_STOP:
         stepper_emergency_stop();
         hydra_gpio_kill_heaters();
+        valve_control_close_all();
         rsp_buf[0] = RSP_ACK;
         transport_send(rsp_buf, 1);
         break;
@@ -87,14 +89,6 @@ static void handle_command(const uint8_t *data, uint16_t len) {
     }
 
     case CMD_ENDSTOP_HOME:
-        /*
-         * Configure endstop monitoring for homing.
-         * Payload: [channel] [endstop_bit_mask]
-         *   endstop_bit_mask = 0 → disable homing mode
-         *   endstop_bit_mask = 1 → monitor X endstop
-         *   endstop_bit_mask = 2 → monitor Y endstop
-         *   endstop_bit_mask = 4 → monitor Z endstop
-         */
         if (len >= 3) {
             stepper_set_homing(data[1], data[2]);
             rsp_buf[0] = RSP_ACK;
@@ -103,11 +97,6 @@ static void handle_command(const uint8_t *data, uint16_t len) {
         break;
 
     case CMD_ENDSTOP_QUERY: {
-        /*
-         * Query endstop state + homing trigger flags.
-         * Response: [RSP_ENDSTOP_STATE] [endstop_state] [trigger_flags]
-         *   trigger_flags: bit N = 1 if channel N's homing was triggered
-         */
         uint8_t endstops = hydra_gpio_read_endstops();
         uint8_t triggers = 0;
         for (int i = 0; i < STEPPER_COUNT; i++) {
@@ -164,6 +153,21 @@ static void handle_command(const uint8_t *data, uint16_t len) {
         }
         break;
 
+    case CMD_VALVE_SET:
+        if (len >= 2) {
+            valve_control_set(data[1]);
+            rsp_buf[0] = RSP_ACK;
+            transport_send(rsp_buf, 1);
+        }
+        break;
+
+    case CMD_VALVE_GET: {
+        rsp_buf[0] = RSP_VALVE_STATE;
+        rsp_buf[1] = valve_control_get();
+        transport_send(rsp_buf, 2);
+        break;
+    }
+
     default:
         rsp_buf[0] = RSP_ERROR;
         rsp_buf[1] = ERR_BAD_CMD;
@@ -192,6 +196,7 @@ void protocol_send_status(void) {
     for (int i = 0; i < STEPPER_COUNT; i++) {
         report.queue_depth[i] = stepper_queue_depth(i);
     }
+    report.valve_state = valve_control_get();
     report.flags = 0;
     /* TODO: Set flags based on safety state */
 
