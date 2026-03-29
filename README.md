@@ -12,8 +12,8 @@ Raspberry Pi CM5 (Linux)              RP2040 (bare metal)
 │ Sync barrier engine   │ ◄──────────► │ ADC thermistors      │
 │ CoreXY kinematics     │   protocol   │ Heater/fan PWM       │
 │ Thermal PID           │              │ TMC2209 UART (PIO)   │
-│ Qt6/QML touchscreen   │              │ Endstop monitoring   │
-│ Web dashboard         │              │ Watchdog / e-stop    │
+│ React web UI (kiosk)  │              │ Endstop monitoring   │
+│ WebSocket server      │              │ Watchdog / e-stop    │
 └───────────────────────┘              └──────────────────────┘
 ```
 
@@ -45,10 +45,12 @@ cmake --build build/mcu
 # Flash: copy build/mcu/hydra-mcu.uf2 to RP2040
 ```
 
-### UI (requires Qt6)
+### UI (React + Vite)
 ```bash
-cmake -B build/ui -S ui
-cmake --build build/ui
+cd ui
+npm install
+npm run build
+# Output: ui/dist/ (served by host at http://<ip>:5000/)
 ```
 
 ## Project Structure
@@ -56,7 +58,7 @@ cmake --build build/ui
 ```
 mcu/          RP2040 firmware (C, Pico SDK)
 host/         CM5 host software (C++20)
-ui/           Touchscreen UI (Qt6/QML)
+ui/           Web UI (React + TypeScript + Tailwind CSS)
 shared/       Protocol definitions (C, shared between host+MCU)
 hardware/     Carrier board PCB (KiCad), BOM
 config/       Machine configuration, systemd services

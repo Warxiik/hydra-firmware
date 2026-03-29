@@ -104,7 +104,7 @@
 - [x] **5.10** UI: Filament change dialog + animation
 - [x] **5.11** CI: GitHub Actions (build host x86+ARM, build MCU, lint, tests)
 - [x] **5.12** Build: Yocto/Buildroot SD card image (meta-hydra layer)
-- [ ] **5.13** Docs: User manual, build guide, API reference
+- [x] **5.13** Docs: User manual, build guide, API reference
 - [ ] **5.14** QA: Extended print testing (8h+ prints, thermal cycling, WiFi stability)
 
 **Tests:** Web API integration tests, OTA update flow, power-loss recovery, long-duration prints
@@ -115,9 +115,8 @@
 
 **Phase:** Phases 1–5 software complete; awaiting hardware for integration
 **Build:** `hydra-host.exe` compiles (C++20, GCC 14.2), 15 tests passing
-**Next steps:**
+**Next steps (all require hardware):**
 - 1.12: Hardware integration test with real RP2040
 - 3.16: First single-nozzle calibration cube print
 - 4.13: Dual-nozzle test prints
-- 5.13: Docs — user manual, build guide, API reference
 - 5.14: QA — extended print testing

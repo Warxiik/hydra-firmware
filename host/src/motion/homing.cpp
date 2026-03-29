@@ -14,14 +14,19 @@ HomingSequence::HomingSequence(comms::McuProxy& mcu, const AxisConfig& config,
 void HomingSequence::start() {
     /* If sensorless homing, enable StallGuard on the TMC drivers */
     if (config_.sensorless && tmc_) {
-        spdlog::info("Enabling StallGuard for sensorless homing (channels {}, {})",
+        spdlog::info("Enabling StallGuard for sensorless homing (channels {}, {}, {})",
                      config_.channel_a,
-                     config_.channel_b != 0xFF ? std::to_string(config_.channel_b) : "none");
+                     config_.channel_b != 0xFF ? std::to_string(config_.channel_b) : "none",
+                     config_.channel_c != 0xFF ? std::to_string(config_.channel_c) : "none");
 
         tmc_->enable_stallguard(config_.channel_a, config_.stall_threshold,
                                 config_.fast_speed, config_.steps_per_mm);
         if (config_.channel_b != 0xFF) {
             tmc_->enable_stallguard(config_.channel_b, config_.stall_threshold,
+                                    config_.fast_speed, config_.steps_per_mm);
+        }
+        if (config_.channel_c != 0xFF) {
+            tmc_->enable_stallguard(config_.channel_c, config_.stall_threshold,
                                     config_.fast_speed, config_.steps_per_mm);
         }
     }
@@ -40,6 +45,9 @@ void HomingSequence::enter_phase(Phase new_phase) {
         if (config_.channel_b != 0xFF) {
             mcu_.endstop_home(config_.channel_b, config_.endstop_bit);
         }
+        if (config_.channel_c != 0xFF) {
+            mcu_.endstop_home(config_.channel_c, config_.endstop_bit);
+        }
         /* Queue a long move towards the endstop */
         double dir = config_.invert_dir ? 1.0 : -1.0;
         queue_move(dir * config_.max_travel_mm, config_.fast_speed);
@@ -54,6 +62,9 @@ void HomingSequence::enter_phase(Phase new_phase) {
         mcu_.endstop_home(config_.channel_a, 0);
         if (config_.channel_b != 0xFF) {
             mcu_.endstop_home(config_.channel_b, 0);
+        }
+        if (config_.channel_c != 0xFF) {
+            mcu_.endstop_home(config_.channel_c, 0);
         }
         /* Move away from endstop */
         double dir = config_.invert_dir ? -1.0 : 1.0;
@@ -70,6 +81,9 @@ void HomingSequence::enter_phase(Phase new_phase) {
         if (config_.channel_b != 0xFF) {
             mcu_.endstop_home(config_.channel_b, config_.endstop_bit);
         }
+        if (config_.channel_c != 0xFF) {
+            mcu_.endstop_home(config_.channel_c, config_.endstop_bit);
+        }
         /* Slow approach */
         double dir = config_.invert_dir ? 1.0 : -1.0;
         queue_move(dir * (config_.backoff_mm * 2), config_.slow_speed);
@@ -84,10 +98,16 @@ void HomingSequence::enter_phase(Phase new_phase) {
         if (config_.channel_b != 0xFF) {
             mcu_.endstop_home(config_.channel_b, 0);
         }
+        if (config_.channel_c != 0xFF) {
+            mcu_.endstop_home(config_.channel_c, 0);
+        }
         /* Reset step position to 0 */
         mcu_.reset_step_clock(config_.channel_a, 0);
         if (config_.channel_b != 0xFF) {
             mcu_.reset_step_clock(config_.channel_b, 0);
+        }
+        if (config_.channel_c != 0xFF) {
+            mcu_.reset_step_clock(config_.channel_c, 0);
         }
         /* Restore normal TMC mode after sensorless homing */
         if (config_.sensorless && tmc_) {
@@ -98,6 +118,10 @@ void HomingSequence::enter_phase(Phase new_phase) {
             if (config_.channel_b != 0xFF) {
                 restore_cfg.driver_id = config_.channel_b;
                 tmc_->disable_stallguard(config_.channel_b, restore_cfg);
+            }
+            if (config_.channel_c != 0xFF) {
+                restore_cfg.driver_id = config_.channel_c;
+                tmc_->disable_stallguard(config_.channel_c, restore_cfg);
             }
         }
         phase_ = Phase::Done;
@@ -117,7 +141,8 @@ bool HomingSequence::tick() {
         auto query = mcu_.endstop_query();
         if (query && (query->trigger_flags &
                       ((1 << config_.channel_a) |
-                       (config_.channel_b != 0xFF ? (1 << config_.channel_b) : 0)))) {
+                       (config_.channel_b != 0xFF ? (1 << config_.channel_b) : 0) |
+                       (config_.channel_c != 0xFF ? (1 << config_.channel_c) : 0)))) {
             spdlog::debug("Homing: fast approach triggered");
             enter_phase(Phase::Backoff);
             return false;
@@ -126,6 +151,7 @@ bool HomingSequence::tick() {
             spdlog::error("Homing: fast approach timeout — endstop not reached");
             mcu_.endstop_home(config_.channel_a, 0);
             if (config_.channel_b != 0xFF) mcu_.endstop_home(config_.channel_b, 0);
+            if (config_.channel_c != 0xFF) mcu_.endstop_home(config_.channel_c, 0);
             /* Restore TMC mode on failure too */
             if (config_.sensorless && tmc_) {
                 drivers::TmcDriverConfig r;
@@ -134,6 +160,10 @@ bool HomingSequence::tick() {
                 if (config_.channel_b != 0xFF) {
                     r.driver_id = config_.channel_b;
                     tmc_->disable_stallguard(config_.channel_b, r);
+                }
+                if (config_.channel_c != 0xFF) {
+                    r.driver_id = config_.channel_c;
+                    tmc_->disable_stallguard(config_.channel_c, r);
                 }
             }
             phase_ = Phase::Failed;
@@ -146,7 +176,9 @@ bool HomingSequence::tick() {
         bool a_idle = mcu_.last_status().queue_depth[config_.channel_a] == 0;
         bool b_idle = config_.channel_b == 0xFF ||
                       mcu_.last_status().queue_depth[config_.channel_b] == 0;
-        if (a_idle && b_idle) {
+        bool c_idle = config_.channel_c == 0xFF ||
+                      mcu_.last_status().queue_depth[config_.channel_c] == 0;
+        if (a_idle && b_idle && c_idle) {
             /* Small delay to let motors settle */
             if (phase_ticks_ > 50) {
                 enter_phase(Phase::SlowProbe);
@@ -164,7 +196,8 @@ bool HomingSequence::tick() {
         auto query = mcu_.endstop_query();
         if (query && (query->trigger_flags &
                       ((1 << config_.channel_a) |
-                       (config_.channel_b != 0xFF ? (1 << config_.channel_b) : 0)))) {
+                       (config_.channel_b != 0xFF ? (1 << config_.channel_b) : 0) |
+                       (config_.channel_c != 0xFF ? (1 << config_.channel_c) : 0)))) {
             spdlog::debug("Homing: slow probe triggered — position locked");
             enter_phase(Phase::SetPosition);
             return false;
@@ -173,6 +206,7 @@ bool HomingSequence::tick() {
             spdlog::error("Homing: slow probe timeout — endstop not reached");
             mcu_.endstop_home(config_.channel_a, 0);
             if (config_.channel_b != 0xFF) mcu_.endstop_home(config_.channel_b, 0);
+            if (config_.channel_c != 0xFF) mcu_.endstop_home(config_.channel_c, 0);
             if (config_.sensorless && tmc_) {
                 drivers::TmcDriverConfig r;
                 r.driver_id = config_.channel_a;
@@ -180,6 +214,10 @@ bool HomingSequence::tick() {
                 if (config_.channel_b != 0xFF) {
                     r.driver_id = config_.channel_b;
                     tmc_->disable_stallguard(config_.channel_b, r);
+                }
+                if (config_.channel_c != 0xFF) {
+                    r.driver_id = config_.channel_c;
+                    tmc_->disable_stallguard(config_.channel_c, r);
                 }
             }
             phase_ = Phase::Failed;
@@ -210,6 +248,11 @@ void HomingSequence::queue_move(double distance_mm, double speed_mm_s) {
     if (config_.channel_b != 0xFF) {
         mcu_.set_step_dir(config_.channel_b, dir);
         mcu_.queue_step(config_.channel_b, interval, static_cast<uint16_t>(steps), 0);
+    }
+
+    if (config_.channel_c != 0xFF) {
+        mcu_.set_step_dir(config_.channel_c, dir);
+        mcu_.queue_step(config_.channel_c, interval, static_cast<uint16_t>(steps), 0);
     }
 }
 
@@ -247,9 +290,10 @@ void HomingController::advance_stage() {
 
     switch (stage_) {
     case Stage::HomingZ:
-        spdlog::info("Homing Z axis");
-        axis_cfg.channel_a = STEPPER_Z;
-        axis_cfg.channel_b = 0xFF; /* Single motor */
+        spdlog::info("Homing Z axis (3-point bed leveling)");
+        axis_cfg.channel_a = STEPPER_Z1;
+        axis_cfg.channel_b = STEPPER_Z2;
+        axis_cfg.channel_c = STEPPER_Z3;
         axis_cfg.endstop_bit = 0x04; /* Z endstop = bit 2 */
         axis_cfg.fast_speed = config_.homing.fast_speed_z;
         axis_cfg.slow_speed = config_.homing.slow_speed_z;
@@ -266,6 +310,7 @@ void HomingController::advance_stage() {
                      config_.homing.sensorless_xy ? ", sensorless" : "");
         axis_cfg.channel_a = STEPPER_COREXY_A;
         axis_cfg.channel_b = STEPPER_COREXY_B;
+        axis_cfg.channel_c = 0xFF;
         axis_cfg.endstop_bit = 0x01; /* X endstop = bit 0 */
         axis_cfg.fast_speed = config_.homing.fast_speed_xy;
         axis_cfg.slow_speed = config_.homing.slow_speed_xy;
@@ -282,6 +327,7 @@ void HomingController::advance_stage() {
                      config_.homing.sensorless_xy ? ", sensorless" : "");
         axis_cfg.channel_a = STEPPER_COREXY_A;
         axis_cfg.channel_b = 0xFF; /* Handle B manually for Y */
+        axis_cfg.channel_c = 0xFF;
         axis_cfg.endstop_bit = 0x02; /* Y endstop = bit 1 */
         axis_cfg.fast_speed = config_.homing.fast_speed_xy;
         axis_cfg.slow_speed = config_.homing.slow_speed_xy;

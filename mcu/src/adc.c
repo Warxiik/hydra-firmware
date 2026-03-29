@@ -3,15 +3,14 @@
 #include "config.h"
 #include "hardware/adc.h"
 
-/* ADC channel mapping: GP27=ADC1, GP28=ADC2, GP29=ADC3 */
-static const uint8_t adc_channels[] = {1, 2, 3}; /* Nozzle0, Nozzle1, Bed */
+/* ADC channel mapping: GP27=ADC1 (manifold), GP28=ADC2 (bed) */
+static const uint8_t adc_channels[] = {1, 2}; /* Manifold, Bed */
 static uint16_t adc_values[ADC_CHANNEL_COUNT];
 static uint8_t current_channel;
 
 void hydra_adc_init(void) {
     adc_init();
-    adc_gpio_init(PIN_ADC_THERM_N0);
-    adc_gpio_init(PIN_ADC_THERM_N1);
+    adc_gpio_init(PIN_ADC_THERM_MANIFOLD);
     adc_gpio_init(PIN_ADC_THERM_BED);
     current_channel = 0;
 }

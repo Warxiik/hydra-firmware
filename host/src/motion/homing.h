@@ -40,6 +40,7 @@ public:
     struct AxisConfig {
         uint8_t channel_a;       /* Primary stepper channel */
         uint8_t channel_b;       /* Secondary channel (for CoreXY), or 0xFF if none */
+        uint8_t channel_c;       /* Tertiary channel (for 3-point Z), or 0xFF if none */
         uint8_t endstop_bit;     /* Endstop bitmask (1=X, 2=Y, 4=Z) */
         double fast_speed;       /* mm/s */
         double slow_speed;       /* mm/s */
